@@ -6,25 +6,33 @@ using VRC.Udon;
 
 namespace tutinoco
 {
-    [UdonBehaviourSyncMode(BehaviourSyncMode.Manual), DefaultExecutionOrder(-1024)]
     public class SimpleNetwork : UdonSharpBehaviour
     {
-        private SimpleNetworkBehaviour[] behaviours = new SimpleNetworkBehaviour[0];
+        private SimpleNetworkBehaviour[] behaviours;
         private SimpleNetworkProxy[] proxys;
-        [UdonSynced(UdonSyncMode.None)] private int[] refer;
+        private int[] refer;
         private string command;
         private char gs = (char)0x1D;
         private char rs = (char)0x1E;
+        private bool isInit;
         private bool isReady;
+
+        private static string GenerateCmdId() { return string.Format("{0:X4}", UnityEngine.Random.Range(0, 65536)); }
 
         public static SimpleNetwork GetInstance()
         {
             GameObject g = GameObject.Find("SimpleNetwork");
-            return g.GetComponent<SimpleNetwork>();
+            SimpleNetwork sn = g.GetComponent<SimpleNetwork>();
+            sn.Initialize();
+            return sn;
         }
 
-        void Start()
+        private void Initialize()
         {
+            if( isInit ) return;
+            isInit = true;
+
+            behaviours = new SimpleNetworkBehaviour[0];
             command = GenerateCmdId();
 
             int len = gameObject.transform.childCount;
@@ -33,30 +41,26 @@ namespace tutinoco
             for(int i=1; i<len; i++) {
                 Transform t = transform.GetChild(i);
                 proxys[i] = t.gameObject.GetComponent<SimpleNetworkProxy>();
+                proxys[i].id = i;
                 proxys[i].sn = this;
             }
         }
 
         void Update()
         {
-            if( isReady && command.Length!=4 ) {
+            if( !isReady ) return;
+            
+            if( command.Length!=4 ) {
                 int pid = Networking.LocalPlayer.playerId;
                 SimpleNetworkProxy p = proxys[refer[pid]];
-                p.SendCommand(command);
+                p.Sync(command);
                 command = GenerateCmdId();
-            } 
-        }
-
-        public void ReceiveCommand( string cmd, VRCPlayerApi player )
-        {
-            foreach( string record in cmd.Substring(4).Split(gs) ) {
-                string[] data = record.Split(rs);
-                uint i = UInt32.Parse(data[0], System.Globalization.NumberStyles.HexNumber);
-                behaviours[i].ReceiveEvent(data[1], data[2], player);
             }
+
+            foreach( SimpleNetworkBehaviour behaviour in behaviours ) behaviour._Update();
         }
 
-        private string GenerateCmdId() { return string.Format("{0:X4}", UnityEngine.Random.Range(0, 65536)); }
+        public bool IsReady() { return isReady; }
 
         public void Register(SimpleNetworkBehaviour behaviour)
         {
@@ -74,27 +78,22 @@ namespace tutinoco
             behaviours = temp;
         }
 
-        public void AddRecord( string record )
+        public void ExecRecord( string record, VRCPlayerApi player=null )
+        {
+            if( player == null ) player = Networking.LocalPlayer;
+            string[] data = record.Split(rs);
+            uint i = UInt32.Parse(data[0], System.Globalization.NumberStyles.HexNumber);
+            behaviours[i].ReceiveEvent(data[1], data[2]);
+        }
+
+        public void SendRecord( string record )
         {
             command = command+(command.Length==4?"":gs.ToString())+record;
         }
 
-        public override void OnPlayerJoined(VRCPlayerApi player)
+        public string CreateRecord( string name, string value, string target )
         {
-            if( !Networking.IsMaster ) return;
-
-            int pid = player.playerId;
-            for(var i=0; i<proxys.Length; i++) {
-                SimpleNetworkProxy proxy = proxys[i];
-                if( IsProxyUsed(i) ) continue;
-                refer[pid] = i;
-                if( Networking.IsOwner(proxy.gameObject) ) OnProxyOwnershipTransferred(proxy);
-                else Networking.SetOwner(player, proxy.gameObject);
-                Debug.Log("新しいユーザに"+i+"番のProxyを割り当てました");
-                break;
-            }
-
-            RequestSerialization();
+            return target+rs+name+rs+value;
         }
 
         private bool IsProxyUsed( int i )
@@ -103,16 +102,53 @@ namespace tutinoco
             return false;
         }
 
-        public void OnProxyOwnershipTransferred( SimpleNetworkProxy proxy )
+        public void OnProxySynced( string cmd, SimpleNetworkProxy proxy )
         {
-            if( Networking.LocalPlayer == Networking.GetOwner(proxy.gameObject) ) isReady = true;
+            VRCPlayerApi player = Networking.GetOwner(proxy.gameObject);
+            foreach( string record in cmd.Substring(4).Split(gs) ) ExecRecord( record, player );
         }
-        
+
+        public override void OnPlayerJoined(VRCPlayerApi player)
+        {
+            if( Networking.LocalPlayer == player && refer[player.playerId] != 0 ) Ready();
+            if( !Networking.IsMaster ) return;
+
+            int pid = player.playerId;
+            for(var i=0; i<proxys.Length; i++) {
+                SimpleNetworkProxy proxy = proxys[i];
+                if( IsProxyUsed(i) ) continue;
+                if( Networking.IsOwner(player, proxy.gameObject) ) OnProxyOwnershipTransferred(proxy);
+                else Networking.SetOwner(player, proxy.gameObject);
+                break;
+            }
+
+            // デバッグ用
+            string refstr =""; foreach(int r in refer) refstr += r+","; Debug.Log("refer:"+refstr);
+
+            RequestSerialization();
+        }
+
         public override void OnPlayerLeft(VRCPlayerApi player)
         {
             int pid = player.playerId;
             Debug.Log(refer[pid]+"番のProxyを解除しました");
             refer[pid] = 0;
+        }
+
+        public void OnProxyOwnershipTransferred( SimpleNetworkProxy proxy )
+        {
+            VRCPlayerApi player = Networking.GetOwner(proxy.gameObject);
+            int pid = player.playerId;
+            refer[pid] = proxy.id;
+            Debug.Log(player.displayName+"さんに"+refer[pid]+"番のProxyを割り当てました");
+            if( Networking.LocalPlayer == player ) Ready();
+        }
+
+        private void Ready()
+        {
+            if( isReady ) return;
+            isReady = true;
+            foreach( SimpleNetworkBehaviour behaviour in behaviours ) behaviour.OnSimpleNetworkReady();
         }
     }
 }

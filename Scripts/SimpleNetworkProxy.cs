@@ -9,14 +9,15 @@ namespace tutinoco
     public class SimpleNetworkProxy : UdonSharpBehaviour
     {
         public SimpleNetwork sn;
+        public int id;
 
         [UdonSynced(UdonSyncMode.None), FieldChangeCallback(nameof(cmd))] private string _cmd;
         public string cmd {
             get { return _cmd; }
-            set { sn.ReceiveCommand(_cmd=value, Networking.GetOwner(gameObject)); }
+            set { sn.OnProxySynced(_cmd=value, this); }
         }
 
-        public void SendCommand(string command)
+        public void Sync(string command)
         {
             cmd = command;
             RequestSerialization();
@@ -24,6 +25,7 @@ namespace tutinoco
 
         public override void OnOwnershipTransferred(VRCPlayerApi player)
         {
+            if( player.isMaster ) return; // Proxy解除時の対策がこれでいいかもっと検討したほうがいい
             sn.OnProxyOwnershipTransferred(this);
         }
     }
