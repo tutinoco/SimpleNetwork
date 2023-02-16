@@ -33,11 +33,11 @@ namespace tutinoco
             isInit = true;
 
             behaviours = new SimpleNetworkBehaviour[0];
+            refer = new int[0];
             command = GenerateCmdId();
 
             int len = gameObject.transform.childCount;
             proxys = new SimpleNetworkProxy[len+1];
-            refer = new int[len+1];
             for(int i=1; i<len; i++) {
                 Transform t = transform.GetChild(i);
                 proxys[i] = t.gameObject.GetComponent<SimpleNetworkProxy>();
@@ -51,9 +51,7 @@ namespace tutinoco
             if( !isReady ) return;
             
             if( command.Length!=4 ) {
-                int pid = Networking.LocalPlayer.playerId;
-                SimpleNetworkProxy p = proxys[refer[pid]];
-                p.Sync(command);
+                GetProxy(Networking.LocalPlayer).Sync(command);
                 command = GenerateCmdId();
             }
 
@@ -96,6 +94,30 @@ namespace tutinoco
             return target+rs+name+rs+value;
         }
 
+        private void AttachProxy( VRCPlayerApi player, SimpleNetworkProxy proxy )
+        {
+            int[] temp = new int[player.playerId];
+            refer.CopyTo(temp, 0);
+            refer = temp;
+            int i = player.playerId - 1;
+            refer[i] = proxy.id;
+
+            Debug.Log(player.displayName+"さんに"+proxy.id+"番のProxyを割り当てました");
+        }
+
+        private void DetachProxy( VRCPlayerApi player )
+        {
+            int i = player.playerId - 1;
+            Debug.Log(refer[i]+"番のProxyを解除しました");
+            refer[i] = 0;
+        }
+
+        private SimpleNetworkProxy GetProxy( VRCPlayerApi player )
+        {
+            int i = player.playerId - 1;
+            return proxys[refer[i]];
+        }
+
         private bool IsProxyUsed( int i )
         {
             foreach(int j in refer) if(j == i) return true;
@@ -110,11 +132,11 @@ namespace tutinoco
 
         public override void OnPlayerJoined(VRCPlayerApi player)
         {
-            if( Networking.LocalPlayer == player && refer[player.playerId] != 0 ) Ready();
+            if( Networking.LocalPlayer == player ) Ready();
             if( !Networking.IsMaster ) return;
 
             int pid = player.playerId;
-            for(var i=0; i<proxys.Length; i++) {
+            for(var i=1; i<proxys.Length+1; i++) {
                 SimpleNetworkProxy proxy = proxys[i];
                 if( IsProxyUsed(i) ) continue;
                 if( Networking.IsOwner(player, proxy.gameObject) ) OnProxyOwnershipTransferred(proxy);
@@ -130,17 +152,13 @@ namespace tutinoco
 
         public override void OnPlayerLeft(VRCPlayerApi player)
         {
-            int pid = player.playerId;
-            Debug.Log(refer[pid]+"番のProxyを解除しました");
-            refer[pid] = 0;
+            DetachProxy(player);
         }
 
         public void OnProxyOwnershipTransferred( SimpleNetworkProxy proxy )
         {
             VRCPlayerApi player = Networking.GetOwner(proxy.gameObject);
-            int pid = player.playerId;
-            refer[pid] = proxy.id;
-            Debug.Log(player.displayName+"さんに"+refer[pid]+"番のProxyを割り当てました");
+            AttachProxy(player, proxy);
             if( Networking.LocalPlayer == player ) Ready();
         }
 
