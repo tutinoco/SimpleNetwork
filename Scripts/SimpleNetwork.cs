@@ -6,6 +6,18 @@ using VRC.Udon;
 
 namespace tutinoco
 {
+    public enum SimpleNetworkTarget
+    {
+        All,
+        Owner,
+        Master,
+        Self,
+        NotOwner,
+        NotMaster,
+        NotSelf,
+        Length,
+    }
+
     public class SimpleNetwork : UdonSharpBehaviour
     {
         private SimpleNetworkBehaviour[] behaviours;
@@ -16,11 +28,11 @@ namespace tutinoco
         private bool isInit;
         private bool isReady;
 
-        private bool[] rIsSyncs;
-        private int[] rDelays;
+        private int[] rTargets;
         private SimpleNetworkBehaviour[] rSources;
         private string[] rNames;
         private string[] rValues;
+        private int[] rDelays;
 
         private static string GenerateCmdId() { return string.Format("{0:X4}", UnityEngine.Random.Range(0, 65536)); }
 
@@ -51,7 +63,7 @@ namespace tutinoco
             behaviours = new SimpleNetworkBehaviour[0];
             refer = new int[0];
 
-            rIsSyncs = new bool[0];
+            rTargets = new int[0];
             rDelays = new int[0];
             rSources = new SimpleNetworkBehaviour[0];
             rNames = new string[0];
@@ -74,10 +86,11 @@ namespace tutinoco
             string command = "";
             for(var i=0; i<rDelays.Length; i++) {
                 if( rDelays[i] == 0 ) {
-                    if( !rIsSyncs[i] ) rSources[i].ReceiveEvent(rNames[i], rValues[i]);
+                    if( rTargets[i] == (int)SimpleNetworkTarget.Self ) rSources[i].ReceiveEvent(rNames[i], rValues[i]);
                     else {
-                        string srcId = rSources[i]._id.ToString("X");
-                        string record = srcId + rs + rNames[i] + rs + rValues[i];
+                        string source = rSources[i]._id.ToString("X");
+                        string target = rTargets[i].ToString("X");
+                        string record = source + rs + target + rs + rNames[i] + rs + rValues[i];
                         command += (command==""?GenerateCmdId():gs.ToString())+record;
                     }
                 }
@@ -107,18 +120,21 @@ namespace tutinoco
             behaviours = temp;
         }
 
-        public void SetEvent( bool isSync, int delay, SimpleNetworkBehaviour source, string name, string value )
+        // 1~6はEnumによるTarget指定、intの場合は7からplayerID指定、指定したplayerID以外を指定する場合0xFFFから設定される。詳しくはtutinocoに聞いてください。
+        public void SetEvent( SimpleNetworkBehaviour source, SimpleNetworkTarget target, string name, string value, int delay ) { _SetEvent(source, (int)target, name, value, delay); }
+        public void SetEvent( SimpleNetworkBehaviour source, int target, string name, string value, int delay ) { _SetEvent(source, target<0?(target+1)*-1+0xFFF:target+(int)SimpleNetworkTarget.Length, name, value, delay); }
+        private void _SetEvent( SimpleNetworkBehaviour source, int target, string name, string value, int delay )
         {
             int idx = rDelays.Length;
             for (int i=0; i<rDelays.Length; i++) if(delay>rDelays[i]){idx=i;break;}
             if( rDelays.Length != idx && rDelays[idx] == -1 ) {
-                rIsSyncs[idx] = isSync;
+                rTargets[idx] = target;
                 rDelays[idx] = delay;
                 rSources[idx] = source;
                 rNames[idx] = name;
                 rValues[idx] = value;
             } else {
-                rIsSyncs = InsertElement(rIsSyncs, idx, isSync);
+                rTargets = InsertElement(rTargets, idx, target);
                 rDelays = InsertElement(rDelays, idx, delay);
                 rSources = InsertElement(rSources, idx, source);
                 rNames = InsertElement(rNames, idx, name);
@@ -162,7 +178,22 @@ namespace tutinoco
             foreach( string record in cmd.Substring(4).Split(gs) ) {
                 string[] data = record.Split(rs);
                 uint i = UInt32.Parse(data[0], System.Globalization.NumberStyles.HexNumber);
-                behaviours[i].ReceiveEvent(data[1], data[2]);
+                uint target = UInt32.Parse(data[1], System.Globalization.NumberStyles.HexNumber);
+                SimpleNetworkBehaviour behaviour = behaviours[i];
+
+                bool isTarget = false;
+                if( target == (int)SimpleNetworkTarget.All ) isTarget = true;
+                else if( target == (int)SimpleNetworkTarget.Owner && Networking.IsOwner(behaviour.gameObject) ) isTarget = true;
+                else if( target == (int)SimpleNetworkTarget.Master && Networking.IsMaster ) isTarget = true;
+                else if( target == (int)SimpleNetworkTarget.Self && Networking.IsOwner(proxy.gameObject) ) isTarget = true;
+                else if( target == (int)SimpleNetworkTarget.NotOwner && !Networking.IsOwner(behaviour.gameObject) ) isTarget = true;
+                else if( target == (int)SimpleNetworkTarget.NotMaster && !Networking.IsMaster ) isTarget = true;
+                else if( target == (int)SimpleNetworkTarget.NotSelf && !Networking.IsOwner(proxy.gameObject) ) isTarget = true;
+                else if( target < 0xFFF && Networking.LocalPlayer.playerId == target - (int)SimpleNetworkTarget.Length ) isTarget = true;
+                else if( target >= 0xFFF && Networking.LocalPlayer.playerId != target-0xFFF ) isTarget = true;
+
+                if( !isTarget ) continue;
+                behaviour.ReceiveEvent(data[2], data[3]);
             }
         }
 
@@ -185,9 +216,6 @@ namespace tutinoco
                 else Networking.SetOwner(player, proxy.gameObject);
                 break;
             }
-
-            // デバッグ用
-            string refstr =""; foreach(int r in refer) refstr += r+","; Debug.Log("refer:"+refstr);
 
             RequestSerialization();
         }
