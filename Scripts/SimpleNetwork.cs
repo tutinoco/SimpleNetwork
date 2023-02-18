@@ -11,11 +11,16 @@ namespace tutinoco
         private SimpleNetworkBehaviour[] behaviours;
         private SimpleNetworkProxy[] proxys;
         private int[] refer;
-        private string command;
         private char gs = (char)0x1D;
         private char rs = (char)0x1E;
         private bool isInit;
         private bool isReady;
+
+        private bool[] rIsSyncs;
+        private int[] rDelays;
+        private SimpleNetworkBehaviour[] rSources;
+        private string[] rNames;
+        private string[] rValues;
 
         private static string GenerateCmdId() { return string.Format("{0:X4}", UnityEngine.Random.Range(0, 65536)); }
 
@@ -27,6 +32,17 @@ namespace tutinoco
             return sn;
         }
 
+        public static T[] InsertElement<T>(T[] ary, int idx, T elm)
+        {
+            T[] tmp = new T[ary.Length + 1];
+            int j = 0;
+            for (int i = 0; i < tmp.Length; i++) {
+                if (i == idx) tmp[i] = elm;
+                else { tmp[i]=ary[j]; j++; }
+            }
+            return tmp;
+        }
+
         private void Initialize()
         {
             if( isInit ) return;
@@ -34,7 +50,12 @@ namespace tutinoco
 
             behaviours = new SimpleNetworkBehaviour[0];
             refer = new int[0];
-            command = GenerateCmdId();
+
+            rIsSyncs = new bool[0];
+            rDelays = new int[0];
+            rSources = new SimpleNetworkBehaviour[0];
+            rNames = new string[0];
+            rValues = new string[0];
 
             int len = gameObject.transform.childCount;
             proxys = new SimpleNetworkProxy[len+1];
@@ -46,52 +67,69 @@ namespace tutinoco
             }
         }
 
-        void Update()
+        private void Update()
         {
             if( !isReady ) return;
-            
-            if( command.Length!=4 ) {
-                GetProxy(Networking.LocalPlayer).Sync(command);
-                command = GenerateCmdId();
+
+            string command = "";
+            for(var i=0; i<rDelays.Length; i++) {
+                if( rDelays[i] == 0 ) {
+                    if( !rIsSyncs[i] ) rSources[i].ReceiveEvent(rNames[i], rValues[i]);
+                    else {
+                        string srcId = rSources[i]._id.ToString("X");
+                        string record = srcId + rs + rNames[i] + rs + rValues[i];
+                        command += (command==""?GenerateCmdId():gs.ToString())+record;
+                    }
+                }
+                if( rDelays[i] >= 0) rDelays[i]--;
             }
 
-            foreach( SimpleNetworkBehaviour behaviour in behaviours ) behaviour._Update();
+            if( command != "" ) {
+                Debug.Log(command);
+                GetProxy(Networking.LocalPlayer).Sync(command);
+                command="";
+            }
         }
-
-        public bool IsReady() { return isReady; }
 
         public void Register(SimpleNetworkBehaviour behaviour)
         {
             int index = behaviours.Length;
             string x = Networking.GetUniqueName(behaviour.gameObject);
-            for (int i = 0; i < behaviours.Length; i++) {
+            for (int i=0; i<behaviours.Length; i++) {
                 string y = Networking.GetUniqueName(behaviours[i].gameObject);
                 if (y.CompareTo(x) > 0) { index=i; break; }
             }
-            var temp = new SimpleNetworkBehaviour[behaviours.Length + 1];
-            for (int i = 0; i < index; i++) temp[i] = behaviours[i];
+            var temp = new SimpleNetworkBehaviour[behaviours.Length+1];
+            for (int i=0; i<index; i++) temp[i] = behaviours[i];
             behaviour._id = (uint)index;
             temp[index] = behaviour;
-            for (int i = index+1; i<temp.Length; i++) { behaviours[i-1]._id++; temp[i]=behaviours[i-1]; }
+            for (int i = index+1; i<temp.Length; i++) { temp[i]=behaviours[i-1]; temp[i]._id++; }
             behaviours = temp;
         }
 
-        public void ExecRecord( string record, VRCPlayerApi player=null )
+        public void SetEvent( bool isSync, int delay, SimpleNetworkBehaviour source, string name, string value )
         {
-            if( player == null ) player = Networking.LocalPlayer;
-            string[] data = record.Split(rs);
-            uint i = UInt32.Parse(data[0], System.Globalization.NumberStyles.HexNumber);
-            behaviours[i].ReceiveEvent(data[1], data[2]);
+            int idx = rDelays.Length;
+            for (int i=0; i<rDelays.Length; i++) if(delay>rDelays[i]){idx=i;break;}
+            if( rDelays.Length != idx && rDelays[idx] == -1 ) {
+                rIsSyncs[idx] = isSync;
+                rDelays[idx] = delay;
+                rSources[idx] = source;
+                rNames[idx] = name;
+                rValues[idx] = value;
+            } else {
+                rIsSyncs = InsertElement(rIsSyncs, idx, isSync);
+                rDelays = InsertElement(rDelays, idx, delay);
+                rSources = InsertElement(rSources, idx, source);
+                rNames = InsertElement(rNames, idx, name);
+                rValues = InsertElement(rValues, idx, value);
+            }
         }
 
-        public void SendRecord( string record )
+        private bool IsProxyUsed( int i )
         {
-            command = command+(command.Length==4?"":gs.ToString())+record;
-        }
-
-        public string CreateRecord( string name, string value, string target )
-        {
-            return target+rs+name+rs+value;
+            foreach(int j in refer) if(j == i) return true;
+            return false;
         }
 
         private void AttachProxy( VRCPlayerApi player, SimpleNetworkProxy proxy )
@@ -118,21 +156,25 @@ namespace tutinoco
             return proxys[refer[i]];
         }
 
-        private bool IsProxyUsed( int i )
-        {
-            foreach(int j in refer) if(j == i) return true;
-            return false;
-        }
-
         public void OnProxySynced( string cmd, SimpleNetworkProxy proxy )
         {
             VRCPlayerApi player = Networking.GetOwner(proxy.gameObject);
-            foreach( string record in cmd.Substring(4).Split(gs) ) ExecRecord( record, player );
+            foreach( string record in cmd.Substring(4).Split(gs) ) {
+                string[] data = record.Split(rs);
+                uint i = UInt32.Parse(data[0], System.Globalization.NumberStyles.HexNumber);
+                behaviours[i].ReceiveEvent(data[1], data[2]);
+            }
+        }
+
+        public void OnProxyOwnershipTransferred( SimpleNetworkProxy proxy )
+        {
+            VRCPlayerApi player = Networking.GetOwner(proxy.gameObject);
+            AttachProxy(player, proxy);
+            if( Networking.LocalPlayer == player ) isReady = true;
         }
 
         public override void OnPlayerJoined(VRCPlayerApi player)
         {
-            if( Networking.LocalPlayer == player ) Ready();
             if( !Networking.IsMaster ) return;
 
             int pid = player.playerId;
@@ -153,20 +195,6 @@ namespace tutinoco
         public override void OnPlayerLeft(VRCPlayerApi player)
         {
             DetachProxy(player);
-        }
-
-        public void OnProxyOwnershipTransferred( SimpleNetworkProxy proxy )
-        {
-            VRCPlayerApi player = Networking.GetOwner(proxy.gameObject);
-            AttachProxy(player, proxy);
-            if( Networking.LocalPlayer == player ) Ready();
-        }
-
-        private void Ready()
-        {
-            if( isReady ) return;
-            isReady = true;
-            foreach( SimpleNetworkBehaviour behaviour in behaviours ) behaviour.OnSimpleNetworkReady();
         }
     }
 }
