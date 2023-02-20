@@ -6,7 +6,7 @@ using VRC.Udon;
 
 namespace tutinoco
 {
-    public enum SimpleNetworkTarget
+    public enum SendTo
     {
         All,
         Owner,
@@ -15,11 +15,12 @@ namespace tutinoco
         NotOwner,
         NotMaster,
         NotSelf,
-        Length,
     }
 
     public class SimpleNetwork : UdonSharpBehaviour
     {
+        private bool isDebugMode;
+
         private SimpleNetworkBehaviour[] behaviours;
         private SimpleNetworkProxy[] proxys;
         private int[] refer;
@@ -27,14 +28,14 @@ namespace tutinoco
         private char rs = (char)0x1E;
         private bool isInit;
         private bool isReady;
+        private int syncCount;
+        private int behaviorDigit = 2;
 
-        private int[] rTargets;
+        private int[] rSendTo;
         private SimpleNetworkBehaviour[] rSources;
         private string[] rNames;
         private string[] rValues;
         private int[] rDelays;
-
-        private static string GenerateCmdId() { return string.Format("{0:X4}", UnityEngine.Random.Range(0, 65536)); }
 
         public static SimpleNetwork GetInstance()
         {
@@ -42,6 +43,12 @@ namespace tutinoco
             SimpleNetwork sn = g.GetComponent<SimpleNetwork>();
             sn.Initialize();
             return sn;
+        }
+
+        public static void DebugMode( bool flg )
+        {
+            var sn = GetInstance();
+            sn.isDebugMode = flg;
         }
 
         public static T[] InsertElement<T>(T[] ary, int idx, T elm)
@@ -63,7 +70,7 @@ namespace tutinoco
             behaviours = new SimpleNetworkBehaviour[0];
             refer = new int[0];
 
-            rTargets = new int[0];
+            rSendTo = new int[0];
             rDelays = new int[0];
             rSources = new SimpleNetworkBehaviour[0];
             rNames = new string[0];
@@ -83,28 +90,52 @@ namespace tutinoco
         {
             if( !isReady ) return;
 
-            string command = "";
+            string code = "";
             for(var i=0; i<rDelays.Length; i++) {
                 if( rDelays[i] == 0 ) {
-                    if( rTargets[i] == (int)SimpleNetworkTarget.Self ) rSources[i].ReceiveEvent(rNames[i], rValues[i]);
-                    else {
-                        string source = rSources[i]._id.ToString("X");
-                        string target = rTargets[i].ToString("X");
-                        string record = source + rs + target + rs + rNames[i] + rs + rValues[i];
-                        command += (command==""?GenerateCmdId():gs.ToString())+record;
-                    }
+                    if( rSendTo[i] == (int)SendTo.Self ) rSources[i].ReceiveEvent(rNames[i], rValues[i]);
+                    else code += (code==""?"":gs.ToString()) + JoinRecord(rSources[i], rSendTo[i], rSources[i]/*とりあえず*/, rNames[i], rValues[i]);
                 }
                 if( rDelays[i] >= 0) rDelays[i]--;
             }
 
-            if( command != "" ) {
-                Debug.Log(command);
-                GetProxy(Networking.LocalPlayer).Sync(command);
-                command="";
+            if( code != "" ) {
+                string syncchar = SimpleNetworkConverter.Padding(SimpleNetworkConverter.ToBase94(syncCount++), 1);
+                code = syncchar + code;
+                if( isDebugMode ) Debug.Log("SimpleNetwork Send Code: "+code.Replace(""+rs,":").Replace(""+gs,","));
+                GetProxy(Networking.LocalPlayer).Sync(code);
+                code="";
             }
         }
 
-        public void Register(SimpleNetworkBehaviour behaviour)
+        public string JoinRecord( SimpleNetworkBehaviour source, int player, SimpleNetworkBehaviour target, string name, string value )
+        {
+            string s = SimpleNetworkConverter.Padding(SimpleNetworkConverter.ToBase94((int)source._id), behaviorDigit);
+            string p = SimpleNetworkConverter.Padding(SimpleNetworkConverter.ToBase94(player), 1);
+            string t = SimpleNetworkConverter.Padding(SimpleNetworkConverter.ToBase94((int)target._id), behaviorDigit);
+            return s + p + t + name + rs + value;
+        }
+
+        public string[] SplitRecord( string record )
+        {
+            string[] ary = new string[5];
+
+            ary[0] = record.Substring(0, behaviorDigit);
+            ary[1] = ""+record[behaviorDigit];
+            ary[2] = record.Substring(1+behaviorDigit, 2);
+            string[] namevalue = record.Substring(1+behaviorDigit*2).Split(rs);
+            ary[3] = namevalue[0];
+            ary[4] = namevalue[1];
+
+            return ary;
+        }
+
+        public SimpleNetworkBehaviour GetBehaviour( int id )
+        {
+            return behaviours[id];
+        }
+
+        public void SetBehaviour(SimpleNetworkBehaviour behaviour)
         {
             int index = behaviours.Length;
             string x = Networking.GetUniqueName(behaviour.gameObject);
@@ -120,21 +151,20 @@ namespace tutinoco
             behaviours = temp;
         }
 
-        // 1~6はEnumによるTarget指定、intの場合は7からplayerID指定、指定したplayerID以外を指定する場合0xFFFから設定される。詳しくはtutinocoに聞いてください。
-        public void SetEvent( SimpleNetworkBehaviour source, SimpleNetworkTarget target, string name, string value, int delay ) { _SetEvent(source, (int)target, name, value, delay); }
-        public void SetEvent( SimpleNetworkBehaviour source, int target, string name, string value, int delay ) { _SetEvent(source, target<0?(target+1)*-1+0xFFF:target+(int)SimpleNetworkTarget.Length, name, value, delay); }
-        private void _SetEvent( SimpleNetworkBehaviour source, int target, string name, string value, int delay )
+        public void SetEvent( SimpleNetworkBehaviour source, SendTo sendto, string name, string value, int delay ) { _SetEvent(source, proxys.Length+(int)sendto, name, value, delay); }
+        public void SetEvent( SimpleNetworkBehaviour source, VRCPlayerApi sendto, string name, string value, int delay ) { _SetEvent(source, sendto.playerId, name, value, delay); }
+        private void _SetEvent( SimpleNetworkBehaviour source, int sendto, string name, string value, int delay )
         {
             int idx = rDelays.Length;
             for (int i=0; i<rDelays.Length; i++) if(delay>rDelays[i]){idx=i;break;}
             if( rDelays.Length != idx && rDelays[idx] == -1 ) {
-                rTargets[idx] = target;
+                rSendTo[idx] = sendto;
                 rDelays[idx] = delay;
                 rSources[idx] = source;
                 rNames[idx] = name;
                 rValues[idx] = value;
             } else {
-                rTargets = InsertElement(rTargets, idx, target);
+                rSendTo = InsertElement(rSendTo, idx, sendto);
                 rDelays = InsertElement(rDelays, idx, delay);
                 rSources = InsertElement(rSources, idx, source);
                 rNames = InsertElement(rNames, idx, name);
@@ -156,13 +186,13 @@ namespace tutinoco
             int i = player.playerId - 1;
             refer[i] = proxy.id;
 
-            Debug.Log(player.displayName+"さんに"+proxy.id+"番のProxyを割り当てました");
+            if( isDebugMode ) Debug.Log("SimpleNetwork Assigned Proxy #"+proxy.id+" to "+player.displayName);
         }
 
         private void DetachProxy( VRCPlayerApi player )
         {
             int i = player.playerId - 1;
-            Debug.Log(refer[i]+"番のProxyを解除しました");
+            if( isDebugMode ) Debug.Log("SimpleNetwork Removed Proxy #"+refer[i]);
             refer[i] = 0;
         }
 
@@ -172,28 +202,29 @@ namespace tutinoco
             return proxys[refer[i]];
         }
 
-        public void OnProxySynced( string cmd, SimpleNetworkProxy proxy )
+        public void OnProxySynced( string code, SimpleNetworkProxy proxy )
         {
-            VRCPlayerApi player = Networking.GetOwner(proxy.gameObject);
-            foreach( string record in cmd.Substring(4).Split(gs) ) {
-                string[] data = record.Split(rs);
-                uint i = UInt32.Parse(data[0], System.Globalization.NumberStyles.HexNumber);
-                uint target = UInt32.Parse(data[1], System.Globalization.NumberStyles.HexNumber);
-                SimpleNetworkBehaviour behaviour = behaviours[i];
+            if( isDebugMode ) Debug.Log("SimpleNetwork Receive Code: "+code.Replace(""+rs,":").Replace(""+gs,","));
+            // VRCPlayerApi player = Networking.GetOwner(proxy.gameObject);
+            foreach( string record in code.Substring(1).Split(gs) ) {
+                string[] data = SplitRecord(record);
+                int source = SimpleNetworkConverter.FromBase94(data[0]);
+                int sendto = SimpleNetworkConverter.FromBase94(data[1]);
+                int target = SimpleNetworkConverter.FromBase94(data[2]);
+                SimpleNetworkBehaviour behaviour = behaviours[target];
 
-                bool isTarget = false;
-                if( target == (int)SimpleNetworkTarget.All ) isTarget = true;
-                else if( target == (int)SimpleNetworkTarget.Owner && Networking.IsOwner(behaviour.gameObject) ) isTarget = true;
-                else if( target == (int)SimpleNetworkTarget.Master && Networking.IsMaster ) isTarget = true;
-                else if( target == (int)SimpleNetworkTarget.Self && Networking.IsOwner(proxy.gameObject) ) isTarget = true;
-                else if( target == (int)SimpleNetworkTarget.NotOwner && !Networking.IsOwner(behaviour.gameObject) ) isTarget = true;
-                else if( target == (int)SimpleNetworkTarget.NotMaster && !Networking.IsMaster ) isTarget = true;
-                else if( target == (int)SimpleNetworkTarget.NotSelf && !Networking.IsOwner(proxy.gameObject) ) isTarget = true;
-                else if( target < 0xFFF && Networking.LocalPlayer.playerId == target - (int)SimpleNetworkTarget.Length ) isTarget = true;
-                else if( target >= 0xFFF && Networking.LocalPlayer.playerId != target-0xFFF ) isTarget = true;
+                bool isReceive = false;
+                if( sendto == proxys.Length+(int)SendTo.All ) isReceive = true;
+                else if( sendto == proxys.Length+(int)SendTo.Owner && Networking.IsOwner(behaviour.gameObject) ) isReceive = true;
+                else if( sendto == proxys.Length+(int)SendTo.Master && Networking.IsMaster ) isReceive = true;
+                else if( sendto == proxys.Length+(int)SendTo.Self && Networking.IsOwner(proxy.gameObject) ) isReceive = true;
+                else if( sendto == proxys.Length+(int)SendTo.NotOwner && !Networking.IsOwner(behaviour.gameObject) ) isReceive = true;
+                else if( sendto == proxys.Length+(int)SendTo.NotMaster && !Networking.IsMaster ) isReceive = true;
+                else if( sendto == proxys.Length+(int)SendTo.NotSelf && !Networking.IsOwner(proxy.gameObject) ) isReceive = true;
+                else if( Networking.LocalPlayer.playerId == sendto ) isReceive = true;
+                if( !isReceive ) continue;
 
-                if( !isTarget ) continue;
-                behaviour.ReceiveEvent(data[2], data[3]);
+                behaviour.ReceiveEvent(data[3], data[4]);
             }
         }
 
