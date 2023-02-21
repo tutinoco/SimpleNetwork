@@ -91,7 +91,7 @@ public class Monster : SimpleNetworkBehaviour
 // 5のパワーでジャンプ
 monster.SendEvent("jump", 5.0f);
 
-// (X:1, Y:2, Z:3)の座標にワープ
+// x:1 y:2 z:3 の座標にワープ
 monster.SendEvent("warp", new Vector3(1.0f, 2.0f, 3.0f));
 
 // ふきだしに文字を表示
@@ -99,6 +99,8 @@ monster.SendEvent("talk", "僕を捕まえられるかな？");
 ```
 
 ### 対応している型
+現在`bool` `int` `long` `float` `string` `Vector3` `SimpleNetworkBehaviour`型の送受信に対応しています。
+
 ```C#
 // SendEvent("hoge", true);
 bool boolValue = GetBool(value);
@@ -106,11 +108,14 @@ bool boolValue = GetBool(value);
 // SendEvent("hoge", 5);
 int intValue = GetInt(value);
 
+// SendEvent("hoge", 9223372036854775807);
+int intValue = GetLong(value);
+
 // SendEvent("hoge", 3.14f);
 float floatValue = GetFloat(value);
 
 // SendEvent("hoge", "こんにちは");
-string stringValue = GetString(value);
+string stringValue = value; // string型は、GetString()する必要がありません
 
 // SendEvent("hoge", new Vector3(1.0f, 2.0f, 3.0f));
 Vector3 vector3 = GetVector3(value);
@@ -119,7 +124,7 @@ Vector3 vector3 = GetVector3(value);
 Monster monster = (Monster)GetObject(value); // 初期化されたSimpleNetworkBehaviourのみ受信可能
 ```
 
-### メタデータの受信
+### メタデータの受信◆
 ```C#
 // 送信元プレイヤーを取得します
 VRCPlayerApi player = GetSourcePlayer(value);
@@ -140,7 +145,7 @@ string group = GetGroup(value);
 int index = GetGroupIndex(value);
 ```
 
-## 機能
+## イベントの送信方法
 ### ローカルイベント実行
 ```C#
 // 自分のみイベントを実行
@@ -149,8 +154,9 @@ ExecEvent("Jump", 5.0f);
 
 ### イベントの遅延送信
 ```C#
-// 120フレーム（約2秒）後にイベントを送信
-SendEvent("Jump", 5.0f, 120);
+// 約2秒の120フレーム後にイベント送信
+ExecEvent("Jump", 5.0f, 120); // 自分のみ
+SendEvent("Jump", 5.0f, 120); // 全員
 ```
 
 ### 送信先の指定
@@ -164,8 +170,9 @@ SendEvent(SendTo.Owner, "Jump", 5.0f);
 // インスタンスマスターにイベントを送信
 SendEvent(SendTo.Master, "Jump", 5.0f);
 
-// 自分自身にイベントを送信（ExecEventに同じ）
-SendEvent(SendTo.Self, "Jump", 5.0f);
+// 自分自身にイベントを送信
+SendEvent(SendTo.Self, "Jump", 5.0f); // ExecEventに同じ
+SendEvent(SendTo.Me, "Jump", 5.0f); // RequestEvent()ではSelfとMeは挙動が異なる
 
 // オブジェクト所有者以外にイベントを送信
 SendEvent(SendTo.NotOwner, "Jump", 5.0f);
@@ -180,7 +187,13 @@ SendEvent(SendTo.NotSelf, "Jump", 5.0f);
 SendEvent(player, "Jump", 5.0f);
 ```
 
-### イベント送信の依頼
+もちろん以下のように送信先を指定した上でイベントの遅延送信を行うこともできます。
+```C#
+// インスタンスマスターに2秒遅延してイベントを送信
+SendEvent(SendTo.Master, "Jump", 5.0f, 120);
+```
+
+### イベント送信の依頼◆
 ```C#
 // インスタンスマスターから全員にイベントを送信
 RequestEvent(SendTo.Master, "Jump", 5.0f);
@@ -189,6 +202,7 @@ RequestEvent(SendTo.Master, "Jump", 5.0f);
 RequestEvent(SendTo.Master, Networking.LocalPlayer, "Jump", 5.0f);
 ```
 
+## その他の機能
 ### デバッグ
 ```C#
 // Debug.Logに送信されたコマンド等が送られる

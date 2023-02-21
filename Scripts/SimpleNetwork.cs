@@ -15,6 +15,7 @@ namespace tutinoco
         NotOwner,
         NotMaster,
         NotSelf,
+        Me,
     }
 
     public class SimpleNetwork : UdonSharpBehaviour
@@ -151,9 +152,7 @@ namespace tutinoco
             behaviours = temp;
         }
 
-        public void SetEvent( SimpleNetworkBehaviour source, SendTo sendto, string name, string value, int delay ) { _SetEvent(source, proxys.Length+(int)sendto, name, value, delay); }
-        public void SetEvent( SimpleNetworkBehaviour source, VRCPlayerApi sendto, string name, string value, int delay ) { _SetEvent(source, sendto.playerId, name, value, delay); }
-        private void _SetEvent( SimpleNetworkBehaviour source, int sendto, string name, string value, int delay )
+        public void SetEvent( SimpleNetworkBehaviour source, int sendto, string name, string value, int delay )
         {
             int idx = rDelays.Length;
             for (int i=0; i<rDelays.Length; i++) if(delay>rDelays[i]){idx=i;break;}
@@ -202,15 +201,31 @@ namespace tutinoco
             return proxys[refer[i]];
         }
 
+        public int ToInt( SendTo sendto )
+        {
+            if( sendto == SendTo.Me ) return Networking.LocalPlayer.playerId;
+            return proxys.Length + (int)sendto;
+        }
+
+        public int ToInt( RequestTo request )
+        {
+            return proxys.Length + (int)request;
+        }
+
+        public int ToInt( VRCPlayerApi player )
+        {
+            return player.playerId;
+        }
+
         public void OnProxySynced( string code, SimpleNetworkProxy proxy )
         {
             if( isDebugMode ) Debug.Log("SimpleNetwork Receive Code: "+code.Replace(""+rs,":").Replace(""+gs,","));
             // VRCPlayerApi player = Networking.GetOwner(proxy.gameObject);
             foreach( string record in code.Substring(1).Split(gs) ) {
                 string[] data = SplitRecord(record);
-                int source = SimpleNetworkConverter.FromBase94(data[0]);
-                int sendto = SimpleNetworkConverter.FromBase94(data[1]);
-                int target = SimpleNetworkConverter.FromBase94(data[2]);
+                int source = SimpleNetworkConverter.Base94ToInt(data[0]);
+                int sendto = SimpleNetworkConverter.Base94ToInt(data[1]);
+                int target = SimpleNetworkConverter.Base94ToInt(data[2]);
                 SimpleNetworkBehaviour behaviour = behaviours[target];
 
                 bool isReceive = false;
