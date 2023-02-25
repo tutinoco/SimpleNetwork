@@ -19,6 +19,23 @@ namespace tutinoco
         Me,
     }
 
+    public enum RequestTo
+    {
+        None,
+        Owner,
+        Master,
+    }
+
+    public enum EvObj
+    {
+        Source,
+        RequestTo,
+        SendTo,
+        Name,
+        Value,
+        Delay,
+    }
+
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class SimpleNetwork : UdonSharpBehaviour
     {
@@ -47,21 +64,18 @@ namespace tutinoco
         {
             if( myProxy==null ) return;
 
-            int delayNum = 0;
             foreach( var evObj in evObjs ) {
-                double delay = (double)evObj[4];
+                if( evObj.Length == 0 ) continue;
+                double delay = (double)evObj[(int)EvObj.Delay];
                 int counter = (int)((delay-(int)delay) * 1000000);
-                if( (int)delay == counter ) { myProxy.SetEvent(evObj); }
-                else {
-                    evObj[4] = delay+0.000001;
-                    evObjs[delayNum] = evObj;
-                    delayNum++;
+                if( (int)evObj[(int)EvObj.RequestTo]!=ToInt(RequestTo.None) ) { RemoveEvent(evObj); myProxy.SetEvent(evObj); }
+                else if( (int)delay == counter ){
+                    RemoveEvent(evObj);
+                    if( (int)evObj[(int)EvObj.SendTo]==ToInt(SendTo.Self) ||
+                        (int)evObj[(int)EvObj.SendTo]==ToInt(Networking.LocalPlayer) ) ReceiveEvent(evObj);
+                    else myProxy.SetEvent(evObj);
                 }
             }
-
-            Object[][] tmp = new Object[delayNum][];
-            for(int i=0; i<delayNum; i++) tmp[i]=evObjs[i];
-            evObjs = tmp;
 
             myProxy.SyncEvents();
         }
@@ -87,13 +101,22 @@ namespace tutinoco
             behaviours = temp;
         }
 
-
-        public void SetEvent( Object[] evObj )
+        public void AddEvent(Object[] evObj)
         {
-            Object[][] tmp = new Object[evObjs.Length+1][];
-            evObjs.CopyTo(tmp, 0);
-            tmp[evObjs.Length] = evObj;
-            evObjs = tmp;
+            int index = -1;
+            for (int i = 0; i < evObjs.Length; i++) if (evObjs[i].Length == 0) { index = i; break; }
+            if (index != -1) evObjs[index] = evObj;
+            else {
+                Object[][] tmp = new Object[evObjs.Length + 1][];
+                evObjs.CopyTo(tmp, 0);
+                tmp[evObjs.Length] = evObj;
+                evObjs = tmp;
+            }
+        }
+
+        public void RemoveEvent(Object[] evObj)
+        {
+            for (int i = 0; i < evObjs.Length; i++) if (evObjs[i] == evObj) evObjs[i] = new Object[0];
         }
 
         private bool IsProxyUsed( int i )
@@ -126,6 +149,11 @@ namespace tutinoco
             return proxys.Length + (int)sendto;
         }
 
+        public int ToInt( RequestTo request )
+        {
+            return proxys.Length + (int)request;
+        }
+
         public int ToInt( VRCPlayerApi player )
         {
             return player.playerId;
@@ -135,13 +163,22 @@ namespace tutinoco
         {
             for(int i=0; i<proxy.EventLength(); i++) {
                 Object[] evObj = proxy.GetEvent(i);
-                var source = (SimpleNetworkBehaviour)evObj[0];
-                int sendto = (int)evObj[1];
-                int delay = (int)evObj[4];
+                var source = (SimpleNetworkBehaviour)evObj[(int)EvObj.Source];
+                int request = (int)evObj[(int)EvObj.RequestTo];
+                int sendto = (int)evObj[(int)EvObj.SendTo];
+                int delay = (int)evObj[(int)EvObj.Delay];
 
-                var behaviour = source; // ひとまず
-                
+                if( request == ToInt(RequestTo.Master) && Networking.IsMaster
+                 || request == ToInt(RequestTo.Owner) && Networking.IsOwner(source.gameObject)
+                 || request == Networking.LocalPlayer.playerId ) {
+                    evObj[(int)EvObj.RequestTo]=ToInt(RequestTo.None);
+                    AddEvent(evObj);
+                }
+
+                if( request != ToInt(RequestTo.None) ) continue;
+
                 bool isReceive = false;
+                var behaviour = source; // ひとまず
                 if( sendto == proxys.Length+(int)SendTo.All ) isReceive = true;
                 else if( sendto == proxys.Length+(int)SendTo.Owner && Networking.IsOwner(behaviour.gameObject) ) isReceive = true;
                 else if( sendto == proxys.Length+(int)SendTo.Master && Networking.IsMaster ) isReceive = true;
@@ -152,8 +189,15 @@ namespace tutinoco
                 else if( Networking.LocalPlayer.playerId == sendto ) isReceive = true;
                 if( !isReceive ) continue;
 
-                behaviour._ReceiveEvent(evObj);
+                ReceiveEvent( evObj );
             }
+        }
+
+        public void ReceiveEvent( Object[] evObj )
+        {
+            var behaviour = (SimpleNetworkBehaviour)evObj[(int)EvObj.Source];
+            if( isDebugMode ) Debug.Log("ReceiveEvent: src="+behaviour._id+" sendto="+(int)evObj[(int)EvObj.SendTo]+" name="+(string)evObj[(int)EvObj.Name]+" value="+evObj[(int)EvObj.Value]+" delay="+(int)evObj[(int)EvObj.Delay]);
+            behaviour._ReceiveEvent(evObj);
         }
 
         public void OnProxyOwnershipTransferred( SimpleNetworkProxy proxy )

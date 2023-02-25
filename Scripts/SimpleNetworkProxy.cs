@@ -20,6 +20,7 @@ namespace tutinoco
         [UdonSynced(UdonSyncMode.None)] private int[] types = new int[0];
         [UdonSynced(UdonSyncMode.None)] private int[] indexes = new int[0];
         [UdonSynced(UdonSyncMode.None)] private int[] sources = new int[0];
+        [UdonSynced(UdonSyncMode.None)] private int[] requests = new int[0];
         [UdonSynced(UdonSyncMode.None)] private int[] sendtos = new int[0];
         [UdonSynced(UdonSyncMode.None)] private int[] delays = new int[0];
 
@@ -75,6 +76,7 @@ namespace tutinoco
             if( types.Length > 0 ) types = new int[0];
             if( indexes.Length > 0 ) indexes = new int[0];
             if( sources.Length > 0 ) sources = new int[0];
+            if( requests.Length > 0 ) requests = new int[0];
             if( sendtos.Length > 0 ) sendtos = new int[0];
             if( delays.Length > 0 ) delays = new int[0];
             
@@ -102,30 +104,30 @@ namespace tutinoco
 
         public Object[] GetEvent(int idx)
         {
-            Object[] evObj = new Object[] { sn.GetBehaviour(sources[idx]), sendtos[idx], names[idx], null, delays[idx] };
+            Object[] evObj = new Object[] { sn.GetBehaviour(sources[idx]), requests[idx], sendtos[idx], names[idx], null, delays[idx] };
 
             int t = types[idx];
             int i = indexes[idx];
-            if( t == 0 ) evObj[3] = bools[i];
-            else if( t == 1 ) evObj[3] = chars[i];
-            else if( t == 2 ) evObj[3] = bytes[i];
-            else if( t == 3 ) evObj[3] = sbytes[i];
-            else if( t == 4 ) evObj[3] = shorts[i];
-            else if( t == 5 ) evObj[3] = ushorts[i];
-            else if( t == 6 ) evObj[3] = ints[i];
-            else if( t == 7 ) evObj[3] = uints[i];
-            else if( t == 8 ) evObj[3] = longs[i];
-            else if( t == 9 ) evObj[3] = ulongs[i];
-            else if( t == 10 ) evObj[3] = floats[i];
-            else if( t == 11 ) evObj[3] = doubles[i];
-            else if( t == 12 ) evObj[3] = Vector2s[i];
-            else if( t == 13 ) evObj[3] = Vector3s[i];
-            else if( t == 14 ) evObj[3] = Vector4s[i];
-            else if( t == 15 ) evObj[3] = Quaternions[i];
-            else if( t == 16 ) evObj[3] = strings[i];
-            else if( t == 17 ) evObj[3] = VRCUrls[i];
-            else if( t == 18 ) evObj[3] = Colors[i];
-            else if( t == 19 ) evObj[3] = Color32s[i];
+            if( t == 0 ) evObj[(int)EvObj.Value] = bools[i];
+            else if( t == 1 ) evObj[(int)EvObj.Value] = chars[i];
+            else if( t == 2 ) evObj[(int)EvObj.Value] = bytes[i];
+            else if( t == 3 ) evObj[(int)EvObj.Value] = sbytes[i];
+            else if( t == 4 ) evObj[(int)EvObj.Value] = shorts[i];
+            else if( t == 5 ) evObj[(int)EvObj.Value] = ushorts[i];
+            else if( t == 6 ) evObj[(int)EvObj.Value] = ints[i];
+            else if( t == 7 ) evObj[(int)EvObj.Value] = uints[i];
+            else if( t == 8 ) evObj[(int)EvObj.Value] = longs[i];
+            else if( t == 9 ) evObj[(int)EvObj.Value] = ulongs[i];
+            else if( t == 10 ) evObj[(int)EvObj.Value] = floats[i];
+            else if( t == 11 ) evObj[(int)EvObj.Value] = doubles[i];
+            else if( t == 12 ) evObj[(int)EvObj.Value] = Vector2s[i];
+            else if( t == 13 ) evObj[(int)EvObj.Value] = Vector3s[i];
+            else if( t == 14 ) evObj[(int)EvObj.Value] = Vector4s[i];
+            else if( t == 15 ) evObj[(int)EvObj.Value] = Quaternions[i];
+            else if( t == 16 ) evObj[(int)EvObj.Value] = strings[i];
+            else if( t == 17 ) evObj[(int)EvObj.Value] = VRCUrls[i];
+            else if( t == 18 ) evObj[(int)EvObj.Value] = Colors[i];
+            else if( t == 19 ) evObj[(int)EvObj.Value] = Color32s[i];
 
             return evObj;
         }
@@ -134,13 +136,14 @@ namespace tutinoco
         {
             if( !isWaiting ) { ClearEvents(); isWaiting=true; }
 
-            string name = (string)evObj[2];
-            var value = evObj[3];
+            string name = (string)evObj[(int)EvObj.Name];
+            var value = evObj[(int)EvObj.Value];
             int type = -1;
             int index = 0;
-            int source = ((SimpleNetworkBehaviour)evObj[0])._id;
-            int sendto = (int)evObj[1];
-            int delay = (int)evObj[4];
+            int source = ((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id;
+            int request = (int)evObj[(int)EvObj.RequestTo];
+            int sendto = (int)evObj[(int)EvObj.SendTo];
+            int delay = (int)evObj[(int)EvObj.Delay];
 
             Type t = value.GetType();
             if( t == typeof(bool) ) { type=0; index=AddElement(ref bools, (bool)value); }
@@ -168,6 +171,7 @@ namespace tutinoco
             AddElement(ref types, type);
             AddElement(ref indexes, index);
             AddElement(ref sources, source);
+            AddElement(ref requests, request);
             AddElement(ref sendtos, sendto);
             AddElement(ref delays, delay);
         }
