@@ -8,15 +8,15 @@ SimpleNetworkは、[SimpleNetworkUdonBehavior](https://github.com/tutinoco/Simpl
 ## 特徴
 * `SendCustomNetworkEvent`で不可能な引数の送信ができ、メッセージングプログラミングを可能にします。
 * 煩わしい所有権から解放され、権限の無いオブジェクトからも低レイテンシーで高速な通信が行えます。
-* オブジェクトにグループを設定して、複数のオブジェクトにイベントをイテレーション送信できます。★
+* オブジェクトにグループを設定して、複数のオブジェクトにイベントをイテレーション送信できます。◆
 * 大量にイベントを発行しても、自動的に全てのイベントを1回の送信にまとめるため、安定して動作します。
 * `All`や`Owner`のほかに、`Master`や`player`を設定して、イベントの受信者を限定することができます。
-* `Master`にイベント送信を依頼するなど、他のプレイヤーにイベントの送信を仲介してもらうことができます。★
-* 最後に実行したイベントやイベント履歴をサーバに保存し、後から参加したプレイヤーに送信することができます。★
+* `Master`にイベント送信を依頼するなど、他のプレイヤーにイベントの送信を依頼することができます。
+* 最後に実行したイベントやイベント履歴をサーバに保存し、後から参加したプレイヤーに送信することができます。◆
 * `SendCustomNetworkEventDelayedFrames`に相当するネットワークイベントの遅延送信が可能です。
-* シーンに存在しない動的に生成したオブジェクトに対しても通信が可能です。★
+* シーンに存在しない動的に生成したオブジェクトに対しても通信が可能です。◆
 
-★の機能はまだ実装中です。
+◆の機能はまだ実装中です。
 
 ## 使い方
 シーンに`SimpleNetwork.prefab`を配置し、適当なクラスを作って`SimpleNetworkBehaviour`を継承して`SendEvent()`メソッドを実行することで、インスタンス内にいるプレイヤー（自分を含む）のオブジェクトに値を届けることができます。
@@ -67,19 +67,19 @@ public class Monster : SimpleNetworkBehaviour
 
     public override void ReceiveEvent(string name) // valueを付けなくても
     {
-        // ◆上にジャンプ
+        // 【上にジャンプ】
         if( name == "jump" ) {
             float power = GetFloat(); // floatで受け取れます。
             rigidbody.AddForce(transform.up*power, ForceMode.Impulse);
         }
 
-        // ◆座標にワープ
+        // 【座標にワープ】
         if( name == "warp" ) {
             Vector3 pos = GetVector3(); // Vector3で受け取れます。
             gameObject.transform.position = pos;
         }
 
-        // ◆ふきだしに文字表示
+        // 【ふきだしに文字表示】
         if( name == "talk" ) {
             fukidashi.text = GetString(); // stringで受け取れます。
         }
@@ -121,28 +121,35 @@ public override void ReceiveEvent(string name)
 }
 ```
 
+値の無いイベントの送信も可能です。
+```C#
+monster.SendEvent("Init");
+```
 ### メタデータの受信
 ```C#
-// 送信元オブジェクトを取得します
-SimpleNetworkBehaviour behavior = GetSource();
+public override void ReceiveEvent(string name)
+{
+    // 送信元オブジェクトを取得します
+    SimpleNetworkBehaviour behavior = GetSource();
 
-// このイベントがどのくらい遅延して送られたかを取得します
-int delay = GetDelay();
+    // このイベントがどのくらい遅延して送られたかを取得します
+    int delay = GetDelay();
 
-// 送信元プレイヤーを取得します★
-VRCPlayerApi player = GetSourcePlayer();
+    // 送信元プレイヤーを取得します◆
+    VRCPlayerApi player = GetSourcePlayer();
 
-// このイベントが送られたプレイヤー一覧を取得します★
-VRCPlayerApi[] players = GetSendToPlayers();
+    // このイベントが送られたプレイヤー一覧を取得します◆
+    VRCPlayerApi[] players = GetSendToPlayers();
 
-// このイベントを受信したオブジェクト一覧を取得します★
-SimpleNetworkBehaviour[] behaviors = GetTargetObjects();
+    // このイベントを受信したオブジェクト一覧を取得します◆
+    SimpleNetworkBehaviour[] behaviors = GetTargetObjects();
 
-// イベントに設定されたグループ名を取得します★
-string group = GetGroup();
+    // イベントに設定されたグループ名を取得します◆
+    string group = GetGroup();
 
-// グループでイテレートした際のインデックスを取得します★
-int index = GetGroupIndex();
+    // グループでイテレートした際のインデックスを取得します◆
+    int index = GetGroupIndex();
+}
 ```
 
 ## イベントの送信方法
@@ -193,13 +200,24 @@ SendEvent(player, "Jump", 5.0f);
 SendEvent(SendTo.Master, "Jump", 5.0f, 120);
 ```
 
-### イベント送信の依頼★
+### イベント送信の依頼
+`RequestEvent()`メソッドを使うことで、イベントの送信を他のプレイヤーに依頼することができます。
 ```C#
-// インスタンスマスターから全員にイベントを送信
-RequestEvent(SendTo.Master, "Jump", 5.0f);
+// 【イベントの送信を依頼】
+// インスタンスマスターから全員にイベントを送信するよう依頼
+RequestEvent(RequestTo.Master, "Jump", 5.0f);
 
-// インスタンスマスターから自分にイベントを送信
-RequestEvent(SendTo.Master, Networking.LocalPlayer, "Jump", 5.0f);
+// 【SendToと一緒に利用】
+// インスタンスマスターからオブジェクトオーナーにイベントを送信するよう依頼
+RequestEvent(RequestTo.Master, SendTo.Owner, "Jump", 5.0f);
+
+// 【プレイヤーを直接指定】
+// プレイヤーAからプレイヤーBにイベントを送信するよう依頼
+RequestEvent(playerA, playerB, "Jump", 5.0f);
+
+// 【遅延送信と一緒に利用】
+// オブジェクトオーナー側で60フレーム待機してから自分にイベントを送信するよう依頼
+RequestEvent(RequestTo.Owner, SendTo.Me, "Jump", 5.0f, 60);
 ```
 
 ## その他の機能
