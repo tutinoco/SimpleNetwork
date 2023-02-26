@@ -11,15 +11,15 @@ namespace tutinoco
     public class SimpleNetworkBehaviour : UdonSharpBehaviour
     {
         public int _id;
-        private SimpleNetwork sn;
+        public SimpleNetwork _sn;
         private Object[] obj;
 
         private void I() { SimpleNetworkInit(); }
         public void SimpleNetworkInit()
         {
-            if( sn != null ) return;
-            sn = SimpleNetwork.GetInstance();
-            sn.SetBehaviour(this);
+            if( _sn != null ) return;
+            _sn = SimpleNetwork.GetInstance();
+            _sn.SetBehaviour(this);
         }
 
         public void _ReceiveEvent(Object[] evObj) {
@@ -73,73 +73,81 @@ namespace tutinoco
         public virtual void ReceiveEvent(string name, Color value) { }
         public virtual void ReceiveEvent(string name, Color32 value) { }
 
+
+        public SimpleNetworkBehaviour Duplicate( Vector3 position, SimpleNetworkBehaviour behaviour=null )
+        {
+            behaviour = behaviour ?? this;
+            _sn.Duplicate(behaviour, position);
+            return behaviour;
+        }
+
         // meta
         public int GetDelay() { return (int)obj[(int)EvObj.Delay]; }
         public SimpleNetworkBehaviour GetSource() { return (SimpleNetworkBehaviour)obj[(int)EvObj.Source]; }
 
         // bool
-        public void ExecEvent(string name, bool value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(SendTo.Self), name, value, delay}); }
-        public void SendEvent(string name, bool value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void SendEvent(SendTo sendto, string name, bool value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(sendto), name, value, delay}); }
-        public void SendEvent(VRCPlayerApi sendto, string name, bool value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(RequestTo request, string name, bool value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, bool value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, string name, bool value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
+        public void ExecEvent(string name, bool value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.Self), name, value, delay}); }
+        public void SendEvent(string name, bool value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void SendEvent(SendTo sendto, string name, bool value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void SendEvent(VRCPlayerApi sendto, string name, bool value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, string name, bool value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(RequestTo request, SendTo sendto, string name, bool value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, string name, bool value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
         public bool GetBool() { return (bool)obj[(int)EvObj.Value]; }
     
         // int
-        public void ExecEvent(string name, int value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(SendTo.Self), name, value, delay}); }
-        public void SendEvent(string name, int value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void SendEvent(SendTo sendto, string name, int value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(sendto), name, value, delay}); }
-        public void SendEvent(VRCPlayerApi sendto, string name, int value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(RequestTo request, string name, int value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, int value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, string name, int value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
+        public void ExecEvent(string name, int value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.Self), name, value, delay}); }
+        public void SendEvent(string name, int value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void SendEvent(SendTo sendto, string name, int value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void SendEvent(VRCPlayerApi sendto, string name, int value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, string name, int value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(RequestTo request, SendTo sendto, string name, int value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, string name, int value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
         public int GetInt() { return (int)obj[(int)EvObj.Value]; }
 
         // float
-        public void ExecEvent(string name, float value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(SendTo.Self), name, value, delay}); }
-        public void SendEvent(string name, float value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void SendEvent(SendTo sendto, string name, float value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(sendto), name, value, delay}); }
-        public void SendEvent(VRCPlayerApi sendto, string name, float value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(RequestTo request, string name, float value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, float value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, string name, float value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
+        public void ExecEvent(string name, float value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.Self), name, value, delay}); }
+        public void SendEvent(string name, float value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void SendEvent(SendTo sendto, string name, float value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void SendEvent(VRCPlayerApi sendto, string name, float value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, string name, float value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(RequestTo request, SendTo sendto, string name, float value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, string name, float value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
         public float GetFloat() { return (float)obj[(int)EvObj.Value]; }
 
         // string
-        public void ExecEvent(string name, string value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(SendTo.Self), name, value, delay}); }
-        public void SendEvent(string name, string value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void SendEvent(SendTo sendto, string name, string value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(sendto), name, value, delay}); }
-        public void SendEvent(VRCPlayerApi sendto, string name, string value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(RequestTo request, string name, string value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, string value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, string name, string value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
+        public void ExecEvent(string name, string value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.Self), name, value, delay}); }
+        public void SendEvent(string name, string value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void SendEvent(SendTo sendto, string name, string value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void SendEvent(VRCPlayerApi sendto, string name, string value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, string name, string value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(RequestTo request, SendTo sendto, string name, string value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, string name, string value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
         public string GetString() { return (string)obj[(int)EvObj.Value]; }
 
         // Vector3
-        public void ExecEvent(string name, Vector3 value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(SendTo.Self), name, value, delay}); }
-        public void SendEvent(string name, Vector3 value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void SendEvent(SendTo sendto, string name, Vector3 value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(sendto), name, value, delay}); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Vector3 value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(RequestTo.None), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(RequestTo request, string name, Vector3 value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, string name, Vector3 value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(SendTo.All), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, int delay=0) { I(); sn.AddEvent(new Object[]{this, sn.ToInt(request), sn.ToInt(sendto), name, value, delay}); }
+        public void ExecEvent(string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.Self), name, value, delay}); }
+        public void SendEvent(string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void SendEvent(SendTo sendto, string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void SendEvent(VRCPlayerApi sendto, string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
         public Vector3 GetVector3() { return (Vector3)obj[(int)EvObj.Value]; }
     }
 }

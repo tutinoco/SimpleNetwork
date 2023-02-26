@@ -62,7 +62,7 @@ namespace tutinoco
 
         void Update()
         {
-            if( myProxy==null ) return;
+            if( !IsReady() ) return;
 
             foreach( var evObj in evObjs ) {
                 if( evObj.Length == 0 ) continue;
@@ -80,13 +80,34 @@ namespace tutinoco
             myProxy.SyncEvents();
         }
 
+        public bool IsReady() { return myProxy != null; }
+
+        public SimpleNetworkBehaviour Duplicate( SimpleNetworkBehaviour behaviour, Vector3 position )
+        {
+            GameObject g = Instantiate(behaviour.gameObject, position, Quaternion.identity);
+            var b = g.GetComponent<SimpleNetworkBehaviour>();
+            b._sn = this;
+            SetBehaviour(b);
+            return b;
+        }
+
         public SimpleNetworkBehaviour GetBehaviour( int id )
         {
             return behaviours[id];
         }
 
-        public void SetBehaviour(SimpleNetworkBehaviour behaviour)
+        public int SetBehaviour(SimpleNetworkBehaviour behaviour)
         {
+            if( IsReady() ) {
+                int len = behaviours.Length;
+                SimpleNetworkBehaviour[] tmp = new SimpleNetworkBehaviour[len+1];
+                behaviours.CopyTo(tmp, 0);
+                behaviour._id = len;
+                tmp[len] = behaviour;
+                behaviours = tmp;
+                return len;
+            }
+
             int idx = behaviours.Length;
             string x = Networking.GetUniqueName(behaviour.gameObject);
             for (int i=0; i<behaviours.Length; i++) {
@@ -99,6 +120,8 @@ namespace tutinoco
             temp[idx] = behaviour;
             for (int i = idx+1; i<temp.Length; i++) { temp[i]=behaviours[i-1]; temp[i]._id++; }
             behaviours = temp;
+
+            return idx;
         }
 
         public void AddEvent(Object[] evObj)
