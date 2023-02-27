@@ -338,13 +338,13 @@ MonoBehaviour:
       Data: 
     - Name: $k
       Entry: 1
-      Data: types
+      Data: values
     - Name: $v
       Entry: 7
       Data: 20|UdonSharp.Compiler.FieldDefinition, UdonSharp.Editor
     - Name: <Name>k__BackingField
       Entry: 1
-      Data: types
+      Data: values
     - Name: <UserType>k__BackingField
       Entry: 7
       Data: 21|System.RuntimeType, mscorlib
@@ -398,13 +398,13 @@ MonoBehaviour:
       Data: 
     - Name: $k
       Entry: 1
-      Data: indexes
+      Data: lengths
     - Name: $v
       Entry: 7
       Data: 24|UdonSharp.Compiler.FieldDefinition, UdonSharp.Editor
     - Name: <Name>k__BackingField
       Entry: 1
-      Data: indexes
+      Data: lengths
     - Name: <UserType>k__BackingField
       Entry: 9
       Data: 21

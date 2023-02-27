@@ -14,14 +14,13 @@ SimpleNetworkは、[SimpleNetworkUdonBehavior](https://github.com/tutinoco/Simpl
 * `Master`にイベント送信を依頼するなど、他のプレイヤーにイベントの送信を依頼することができます。
 * 最後に実行したイベントやイベント履歴をサーバに保存し、後から参加したプレイヤーに送信することができます。◆
 * `SendCustomNetworkEventDelayedFrames`に相当するネットワークイベントの遅延送信が可能です。
-* シーンに存在しない動的に生成したオブジェクトに対しても通信が可能です。◆
+* シーンに存在しない動的に生成したオブジェクトに対しても通信が可能です。
 
 ◆の機能はまだ実装中です。
 
 ## 使い方
-シーンに`SimpleNetwork.prefab`を配置し、適当なクラスを作って`SimpleNetworkBehaviour`を継承して`SendEvent()`メソッドを実行することで、インスタンス内にいるプレイヤー（自分を含む）のオブジェクトに値を届けることができます。
-イベントの受信は、サブクラスで`ReceiveEvent`メソッドをオーバーライドすることで可能となり、第一引数にイベント名が、第二引数に値が届きます。
-
+`SimpleNetwork.prefab`をシーンに配置し、適当なクラスを作成して`SimpleNetworkBehaviour`を継承すると、`SendEvent()`メソッドで、全てのプレイヤー（自分自身を含む）の指定したオブジェクトに値を送信することができます。
+イベントを受信するには、サブクラスで`ReceiveEvent`メソッドをオーバーライドします。第一引数にはイベント名が、第二引数には値が届きます。
 ```C#
 using UdonSharp;
 using UnityEngine;
@@ -45,9 +44,9 @@ public class Test : SimpleNetworkBehaviour // 継承して
     }
 }
 ```
-上記のコードでは、オブジェクトが自らのイベントを送信していますが、嬉しいのは、値の送信が可能になったことで、命令されたら動くアクションだけをまとめたクラスを作成できるようになることです。
 
-以下は、命令待ちをするモンスタークラスです。
+上記のコードでは、オブジェクトが自らのイベントを送信していますが、特に嬉しいのは、値を送信できるようになったことで、命令されたら動くアクションだけをまとめたクラスを簡単に作成できるようになることです。
+以下は、命令を待って動くモンスタークラスの例です。
 ```C#
 using UdonSharp;
 using UnityEngine;
@@ -86,7 +85,7 @@ public class Monster : SimpleNetworkBehaviour
     }
 }
 ```
-このモンスタークラスを使って作られたモンスターを制御するには、適当な場所に以下のコードを記述します。
+このモンスタークラスを使って作られたモンスターを制御するには、適当な箇所に以下のコードを記述します。
 ```C#
 // ジャンプ力5.0で飛ぶ！
 monster.SendEvent("jump", 5.0f);
@@ -125,6 +124,63 @@ public override void ReceiveEvent(string name)
 ```C#
 monster.SendEvent("Init");
 ```
+
+### 複数の値を送受信する
+複数の値を送るには、`Pack()`メソッドを利用します。
+```C#
+Vector3 position = Vector3(1.0f, 2.0f, 3.0f);
+Quaternion rotation = Quaternion.identity;
+
+monster.SendEvent("warp2", Pack(position, rotation));
+```
+
+呼び出し元が`SimpleNetworkBehaviour`のサブクラスでない等、`Pack`メソッドを利用できない場合は以下のようにします。
+```C#
+using UdonSharp;
+using UnityEngine;
+using VRC.SDKBase;
+using VRC.Udon;
+using Object = System.Object; // 追加して
+
+public class Test : UdonSharpBehaviour
+{
+    [SerializeField] private Monster monster;
+
+    void Start()
+    {
+        Vector3 position = Vector3(1.0f, 2.0f, 3.0f);
+        Quaternion rotation = Quaternion.identity;
+
+        Objects[] values = new Objects[] {position, rotation}; // Objects[]に格納して
+
+        monster.SendEvent("warp2", values); // 送信する。
+    }
+}
+```
+
+複数の値を受信する方法は以下のようにします。
+```C#
+public override void ReceiveEvent(string name)
+{
+    Vector3 position = GetVector3(0);       // 0番目の値をVector3で取得
+    Quaternion rotation = GetQuaternion(1); // 1番目の値をQuaternionで取得
+
+    // indexを省略することもできます。
+    Vector3 position2 = GetVector3();       // 最初に見つかったVector3を取得
+    Quaternion rotation2 = GetQuaternion(); // 最初に見つかったQuaternionを取得
+}
+```
+
+また、ダイレクトレシーブを使って`Object[]`を直接受信することも可能です。
+```C#
+public override void ReceiveEvent(string name, Object[] values) // valuesに全ての値が届く
+{
+    Vector3 position = (Vector3)values[0];       // 0番目の値をVector3で取得
+    Quaternion rotation = (Quaternion)values[1]; // 1番目の値をQuaternionで取得
+}
+```
+なお、対応していない型の値を`Pack()`に含めるとはできません。
+
 ### メタデータの受信
 ```C#
 public override void ReceiveEvent(string name)
@@ -150,6 +206,14 @@ public override void ReceiveEvent(string name)
     // グループでイテレートした際のインデックスを取得します◆
     int index = GetGroupIndex();
 }
+```
+
+### 制御可能なオブジェクトの複製
+```C#
+// monsterを複製してx:0 y:0 z:0 に配置
+Monster newMonster = (Monster)Duplicate(monster, new Vector3(0,0,0), Quaternion.identity);
+
+newMonster.SendEvent("Jump", 5.0f); // 複製したオブジェクトにイベントを送信
 ```
 
 ## イベントの送信方法
