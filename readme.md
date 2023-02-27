@@ -125,6 +125,61 @@ public override void ReceiveEvent(string name)
 ```C#
 monster.SendEvent("Init");
 ```
+
+### 複数の値を送受信する
+複数の値を送るには、`Pack()`メソッドを利用します。
+対応していない型の値を`Pack()`に含めるとはできません。
+```C#
+Vector3 position = Vector3(1.0f, 2.0f, 3.0f);
+Quaternion rotation = Quaternion.identity;
+monster.SendEvent("warp2", Pack(position, rotation));
+```
+
+呼び出し元が`SimpleNetworkBehaviour`のサブクラスでない等、`Pack`メソッドを利用できない場合は以下のようにします。
+```C#
+using UdonSharp;
+using UnityEngine;
+using VRC.SDKBase;
+using VRC.Udon;
+using Object = System.Object; // 追加して
+
+public class Test : UdonSharpBehaviour
+{
+    [SerializeField] private Monster monster;
+
+    void Start()
+    {
+        Vector3 position = Vector3(1.0f, 2.0f, 3.0f);
+        Quaternion rotation = Quaternion.identity;
+        Objects[] values = new Objects[] {position, rotation};
+        monster.SendEvent("warp2", values);
+    }
+}
+```
+
+値の受信方法は以下のようにします。
+```C#
+public override void ReceiveEvent(string name)
+{
+    Vector3 position = GetVector3(0);       // 0番目の値をVector3で取得
+    Quaternion rotation = GetQuaternion(1); // 1番目の値をQuaternionで取得
+
+    // indexを省略することもできます。
+    Vector3 position2 = GetVector3();       // 最初に見つかったVector3を取得
+    Quaternion rotation2 = GetQuaternion(); // 最初に見つかったQuaternionを取得
+}
+```
+
+また、ダイレクトレシーブを使って受信することも可能です。
+```C#
+public override void ReceiveEvent(string name, Object[] values) // valuesに全ての値が届く
+{
+    Vector3 position = (Vector3)values[0];       // 0番目の値をVector3で取得
+    Quaternion rotation = (Quaternion)values[1]; // 1番目の値をQuaternionで取得
+}
+```
+
+
 ### メタデータの受信
 ```C#
 public override void ReceiveEvent(string name)

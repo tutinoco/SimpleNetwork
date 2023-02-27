@@ -17,8 +17,8 @@ namespace tutinoco
 
         [UdonSynced(UdonSyncMode.None)] private int count;
         [UdonSynced(UdonSyncMode.None)] private string[] names = new string[0];
-        [UdonSynced(UdonSyncMode.None)] private int[] types = new int[0];
-        [UdonSynced(UdonSyncMode.None)] private int[] indexes = new int[0];
+        [UdonSynced(UdonSyncMode.None)] private int[] values = new int[0];
+        [UdonSynced(UdonSyncMode.None)] private int[] lengths = new int[0];
         [UdonSynced(UdonSyncMode.None)] private int[] sources = new int[0];
         [UdonSynced(UdonSyncMode.None)] private int[] requests = new int[0];
         [UdonSynced(UdonSyncMode.None)] private int[] sendtos = new int[0];
@@ -73,8 +73,8 @@ namespace tutinoco
         public void ClearEvents()
         {
             if( names.Length > 0 ) names = new string[0];
-            if( types.Length > 0 ) types = new int[0];
-            if( indexes.Length > 0 ) indexes = new int[0];
+            if( values.Length > 0 ) values = new int[0];
+            if( lengths.Length > 0 ) lengths = new int[0];
             if( sources.Length > 0 ) sources = new int[0];
             if( requests.Length > 0 ) requests = new int[0];
             if( sendtos.Length > 0 ) sendtos = new int[0];
@@ -106,74 +106,104 @@ namespace tutinoco
         {
             Object[] evObj = new Object[] { sn.GetBehaviour(sources[idx]), requests[idx], sendtos[idx], names[idx], null, delays[idx] };
 
-            int t = types[idx];
-            int i = indexes[idx];
-            if( t == 0 ) evObj[(int)EvObj.Value] = bools[i];
-            else if( t == 1 ) evObj[(int)EvObj.Value] = chars[i];
-            else if( t == 2 ) evObj[(int)EvObj.Value] = bytes[i];
-            else if( t == 3 ) evObj[(int)EvObj.Value] = sbytes[i];
-            else if( t == 4 ) evObj[(int)EvObj.Value] = shorts[i];
-            else if( t == 5 ) evObj[(int)EvObj.Value] = ushorts[i];
-            else if( t == 6 ) evObj[(int)EvObj.Value] = ints[i];
-            else if( t == 7 ) evObj[(int)EvObj.Value] = uints[i];
-            else if( t == 8 ) evObj[(int)EvObj.Value] = longs[i];
-            else if( t == 9 ) evObj[(int)EvObj.Value] = ulongs[i];
-            else if( t == 10 ) evObj[(int)EvObj.Value] = floats[i];
-            else if( t == 11 ) evObj[(int)EvObj.Value] = doubles[i];
-            else if( t == 12 ) evObj[(int)EvObj.Value] = Vector2s[i];
-            else if( t == 13 ) evObj[(int)EvObj.Value] = Vector3s[i];
-            else if( t == 14 ) evObj[(int)EvObj.Value] = Vector4s[i];
-            else if( t == 15 ) evObj[(int)EvObj.Value] = Quaternions[i];
-            else if( t == 16 ) evObj[(int)EvObj.Value] = strings[i];
-            else if( t == 17 ) evObj[(int)EvObj.Value] = VRCUrls[i];
-            else if( t == 18 ) evObj[(int)EvObj.Value] = Colors[i];
-            else if( t == 19 ) evObj[(int)EvObj.Value] = Color32s[i];
+            int index = 0;
+            int length = lengths[idx];
+            for(int i=0; i<idx; i++) index += lengths[i];
+
+            if( length == 1 ) evObj[(int)EvObj.Value] = GetValues(index, length)[0];
+            else if( length > 1 ) evObj[(int)EvObj.Value] = GetValues(index, length);
 
             return evObj;
         }
-        
+
+        private int SetValues( Object[] vals )
+        {
+            int length = 0;
+
+            foreach( var v in vals ) {
+
+                int type = -1;
+                int index = 0;
+
+                Type t = v.GetType();
+                if( t == typeof(bool) ) { length++; type=0; index=AddElement(ref bools, (bool)v); }
+                else if( t == typeof(char) ) { length++; type=1; index=AddElement(ref chars, (char)v); }
+                else if( t == typeof(byte) ) { length++; type=2; index=AddElement(ref bytes, (byte)v); }
+                else if( t == typeof(sbyte) ) { length++; type=3; index=AddElement(ref sbytes, (sbyte)v); }
+                else if( t == typeof(short) ) { length++; type=4; index=AddElement(ref shorts, (short)v); }
+                else if( t == typeof(ushort) ) { length++; type=5; index=AddElement(ref ushorts, (ushort)v); }
+                else if( t == typeof(int) ) { length++; type=6; index=AddElement(ref ints, (int)v); }
+                else if( t == typeof(uint) ) { length++; type=7; index=AddElement(ref uints, (uint)v); }
+                else if( t == typeof(long) ) { length++; type=8; index=AddElement(ref longs, (long)v); }
+                else if( t == typeof(ulong) ) { length++; type=9; index=AddElement(ref ulongs, (ulong)v); }
+                else if( t == typeof(float) ) { length++; type=10; index=AddElement(ref floats, (float)v); }
+                else if( t == typeof(double) ) { length++; type=11; index=AddElement(ref doubles, (double)v); }
+                else if( t == typeof(Vector2) ) { length++; type=12; index=AddElement(ref Vector2s, (Vector2)v); }
+                else if( t == typeof(Vector3) ) { length++; type=13; index=AddElement(ref Vector3s, (Vector3)v); }
+                else if( t == typeof(Vector4) ) { length++; type=14; index=AddElement(ref Vector4s, (Vector4)v); }
+                else if( t == typeof(Quaternion) ) { length++; type=15; index=AddElement(ref Quaternions, (Quaternion)v); }
+                else if( t == typeof(string) ) { length++; type=16; index=AddElement(ref strings, (string)v); }
+                else if( t == typeof(VRCUrl) ) { length++; type=17; index=AddElement(ref VRCUrls, (VRCUrl)v); }
+                else if( t == typeof(Color) ) { length++; type=18; index=AddElement(ref Colors, (Color)v); }
+                else if( t == typeof(Color32) ) { length++; type=19; index=AddElement(ref Color32s, (Color32)v); }
+
+                if( type == -1 ) continue;
+
+                AddElement(ref values, type);
+                AddElement(ref values, index);
+            }
+
+            return length;
+        }
+
+        private Object[] GetValues( int index, int length )
+        {
+            Object[] obj = new Object[length][];
+
+            for(int i=0; i<length; i++) {
+                int t = values[(index+i)*2];
+                int j = values[(index+i)*2+1];
+
+                if( t == 0 ) obj[i] = bools[j];
+                else if( t == 1 ) obj[i] = chars[j];
+                else if( t == 2 ) obj[i] = bytes[j];
+                else if( t == 3 ) obj[i] = sbytes[j];
+                else if( t == 4 ) obj[i] = shorts[j];
+                else if( t == 5 ) obj[i] = ushorts[j];
+                else if( t == 6 ) obj[i] = ints[j];
+                else if( t == 7 ) obj[i] = uints[j];
+                else if( t == 8 ) obj[i] = longs[j];
+                else if( t == 9 ) obj[i] = ulongs[j];
+                else if( t == 10 ) obj[i] = floats[j];
+                else if( t == 11 ) obj[i] = doubles[j];
+                else if( t == 12 ) obj[i] = Vector2s[j];
+                else if( t == 13 ) obj[i] = Vector3s[j];
+                else if( t == 14 ) obj[i] = Vector4s[j];
+                else if( t == 15 ) obj[i] = Quaternions[j];
+                else if( t == 16 ) obj[i] = strings[j];
+                else if( t == 17 ) obj[i] = VRCUrls[j];
+                else if( t == 18 ) obj[i] = Colors[j];
+                else if( t == 19 ) obj[i] = Color32s[j];
+            }
+
+            return obj;
+        }
+
         public void SetEvent( Object[] evObj )
         {
             if( !isWaiting ) { ClearEvents(); isWaiting=true; }
 
-            string name = (string)evObj[(int)EvObj.Name];
+            var length = 0;
             var value = evObj[(int)EvObj.Value];
-            int type = -1;
-            int index = 0;
-            int source = ((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id;
-            int request = (int)evObj[(int)EvObj.RequestTo];
-            int sendto = (int)evObj[(int)EvObj.SendTo];
-            int delay = (int)evObj[(int)EvObj.Delay];
+            if( value.GetType() == typeof(Object[]) ) length = SetValues((Object[])value);
+            else length = SetValues(new Object[] {value});
 
-            Type t = value.GetType();
-            if( t == typeof(bool) ) { type=0; index=AddElement(ref bools, (bool)value); }
-            else if( t == typeof(char) ) { type=1; index=AddElement(ref chars, (char)value); }
-            else if( t == typeof(byte) ) { type=2; index=AddElement(ref bytes, (byte)value); }
-            else if( t == typeof(sbyte) ) { type=3; index=AddElement(ref sbytes, (sbyte)value); }
-            else if( t == typeof(short) ) { type=4; index=AddElement(ref shorts, (short)value); }
-            else if( t == typeof(ushort) ) { type=5; index=AddElement(ref ushorts, (ushort)value); }
-            else if( t == typeof(int) ) { type=6; index=AddElement(ref ints, (int)value); }
-            else if( t == typeof(uint) ) { type=7; index=AddElement(ref uints, (uint)value); }
-            else if( t == typeof(long) ) { type=8; index=AddElement(ref longs, (long)value); }
-            else if( t == typeof(ulong) ) { type=9; index=AddElement(ref ulongs, (ulong)value); }
-            else if( t == typeof(float) ) { type=10; index=AddElement(ref floats, (float)value); }
-            else if( t == typeof(double) ) { type=11; index=AddElement(ref doubles, (double)value); }
-            else if( t == typeof(Vector2) ) { type=12; index=AddElement(ref Vector2s, (Vector2)value); }
-            else if( t == typeof(Vector3) ) { type=13; index=AddElement(ref Vector3s, (Vector3)value); }
-            else if( t == typeof(Vector4) ) { type=14; index=AddElement(ref Vector4s, (Vector4)value); }
-            else if( t == typeof(Quaternion) ) { type=15; index=AddElement(ref Quaternions, (Quaternion)value); }
-            else if( t == typeof(string) ) { type=16; index=AddElement(ref strings, (string)value); }
-            else if( t == typeof(VRCUrl) ) { type=17; index=AddElement(ref VRCUrls, (VRCUrl)value); }
-            else if( t == typeof(Color) ) { type=18; index=AddElement(ref Colors, (Color)value); }
-            else if( t == typeof(Color32) ) { type=19; index=AddElement(ref Color32s, (Color32)value); }
-
-            AddElement(ref names, name);
-            AddElement(ref types, type);
-            AddElement(ref indexes, index);
-            AddElement(ref sources, source);
-            AddElement(ref requests, request);
-            AddElement(ref sendtos, sendto);
-            AddElement(ref delays, delay);
+            AddElement(ref names, (string)evObj[(int)EvObj.Name]);
+            AddElement(ref lengths, length);
+            AddElement(ref sources, ((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id);
+            AddElement(ref requests, (int)evObj[(int)EvObj.RequestTo]);
+            AddElement(ref sendtos, (int)evObj[(int)EvObj.SendTo]);
+            AddElement(ref delays, (int)evObj[(int)EvObj.Delay]);
         }
 
         public void SyncEvents()
