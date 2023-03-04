@@ -307,3 +307,6 @@ SimpleNetwork.DebugMode(true);
 実行が許されたイベントは、適切なオブジェクトの`ReceiveEvent()`メソッドが呼ばれ、`SimpleNetworkBehavior`に値を保存、`GetInt()`などのメソッドにより値にアクセスすことで、引数付きのネットワークイベントの発行が実現されています。
 
 また、プロキシの`UdonBehaviourSyncMode`は`Manual`に設定されており、同期変数は高速に同期されるので、`SimpleNetwork`の`SendEvent()`は、`SendCustomNetworkEvent()`よりも高速に送受信できます。
+
+## 注意事項
+・`SendEvent()`メソッドをに値を渡すとき、値渡しでなく参照渡しで渡すと`SendEvent()`を実行した時とは異なる値が送信されることがあります。

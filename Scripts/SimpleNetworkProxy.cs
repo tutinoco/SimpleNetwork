@@ -44,6 +44,7 @@ namespace tutinoco
         [UdonSynced(UdonSyncMode.None)] private VRCUrl[] VRCUrls = new VRCUrl[0];
         [UdonSynced(UdonSyncMode.None)] private Color[] Colors = new Color[0];
         [UdonSynced(UdonSyncMode.None)] private Color32[] Color32s = new Color32[0];
+        [UdonSynced(UdonSyncMode.None)] private int[] Behaviors = new int[0];
 
         private static int AddElement<T>(ref T[] ary, T elm)
         {
@@ -68,6 +69,48 @@ namespace tutinoco
         public int EventLength()
         {
             return names.Length;
+        }
+
+        public Object[] GetEvent(int idx)
+        {
+            Object[] evObj = new Object[] { sn.GetBehaviour(sources[idx]), requests[idx], sendtos[idx], names[idx], null, delays[idx] };
+
+            int index = 0;
+            int length = lengths[idx];
+            for(int i=0; i<idx; i++) index += lengths[i];
+
+            if( length == 1 ) evObj[(int)EvObj.Value] = GetValues(index, length)[0];
+            else if( length > 1 ) evObj[(int)EvObj.Value] = GetValues(index, length);
+
+            return evObj;
+        }
+
+        public void SetEvent( Object[] evObj )
+        {
+            if( !isWaiting ) { ClearEvents(); isWaiting=true; }
+
+            var length = 0;
+            var value = evObj[(int)EvObj.Value];
+            if( value.GetType() == typeof(Object[]) ) length = SetValues((Object[])value);
+            else length = SetValues(new Object[] {value});
+
+            AddElement(ref names, (string)evObj[(int)EvObj.Name]);
+            AddElement(ref lengths, length);
+            AddElement(ref sources, ((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id);
+            AddElement(ref requests, (int)evObj[(int)EvObj.RequestTo]);
+            AddElement(ref sendtos, (int)evObj[(int)EvObj.SendTo]);
+            AddElement(ref delays, (int)evObj[(int)EvObj.Delay]);
+        }
+
+        public void SyncEvents()
+        {
+            if( !isWaiting ) return;
+            count++;
+            isWaiting = false;
+            RequestSerialization();
+#if UNITY_EDITOR
+            OnPreSerialization();
+#endif
         }
 
         public void ClearEvents()
@@ -100,20 +143,7 @@ namespace tutinoco
             if( VRCUrls.Length > 0 ) VRCUrls = new VRCUrl[0];
             if( Colors.Length > 0 ) Colors = new Color[0];
             if( Color32s.Length > 0 ) Color32s = new Color32[0];
-        }
-
-        public Object[] GetEvent(int idx)
-        {
-            Object[] evObj = new Object[] { sn.GetBehaviour(sources[idx]), requests[idx], sendtos[idx], names[idx], null, delays[idx] };
-
-            int index = 0;
-            int length = lengths[idx];
-            for(int i=0; i<idx; i++) index += lengths[i];
-
-            if( length == 1 ) evObj[(int)EvObj.Value] = GetValues(index, length)[0];
-            else if( length > 1 ) evObj[(int)EvObj.Value] = GetValues(index, length);
-
-            return evObj;
+            if( Behaviors.Length > 0 ) Behaviors = new int[0];
         }
 
         private int SetValues( Object[] vals )
@@ -146,6 +176,7 @@ namespace tutinoco
                 else if( t == typeof(VRCUrl) ) { length++; type=17; index=AddElement(ref VRCUrls, (VRCUrl)v); }
                 else if( t == typeof(Color) ) { length++; type=18; index=AddElement(ref Colors, (Color)v); }
                 else if( t == typeof(Color32) ) { length++; type=19; index=AddElement(ref Color32s, (Color32)v); }
+                else if( t == typeof(UdonSharpBehaviour) ) { length++; type=20; index=AddElement(ref Behaviors, ((SimpleNetworkBehaviour)v)._id); }
 
                 if( type == -1 ) continue;
 
@@ -184,35 +215,16 @@ namespace tutinoco
                 else if( t == 17 ) obj[i] = VRCUrls[j];
                 else if( t == 18 ) obj[i] = Colors[j];
                 else if( t == 19 ) obj[i] = Color32s[j];
+                else if( t == 20 ) obj[i] = sn.GetBehaviour(Behaviors[j]);
             }
 
             return obj;
         }
 
-        public void SetEvent( Object[] evObj )
+
+        public override void OnPreSerialization()
         {
-            if( !isWaiting ) { ClearEvents(); isWaiting=true; }
-
-            var length = 0;
-            var value = evObj[(int)EvObj.Value];
-            if( value.GetType() == typeof(Object[]) ) length = SetValues((Object[])value);
-            else length = SetValues(new Object[] {value});
-
-            AddElement(ref names, (string)evObj[(int)EvObj.Name]);
-            AddElement(ref lengths, length);
-            AddElement(ref sources, ((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id);
-            AddElement(ref requests, (int)evObj[(int)EvObj.RequestTo]);
-            AddElement(ref sendtos, (int)evObj[(int)EvObj.SendTo]);
-            AddElement(ref delays, (int)evObj[(int)EvObj.Delay]);
-        }
-
-        public void SyncEvents()
-        {
-            if( !isWaiting ) return;
-            count++;
-            isWaiting = false;
-            RequestSerialization();
-            if( Networking.IsOwner(gameObject) ) OnDeserialization();
+            sn.OnProxySynced(this);
         }
 
         public override void OnDeserialization()

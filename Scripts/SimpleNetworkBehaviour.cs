@@ -10,11 +10,10 @@ namespace tutinoco
 {
     public class SimpleNetworkBehaviour : UdonSharpBehaviour
     {
-        public int _id;
-        public SimpleNetwork _sn;
+        [System.NonSerialized] public int _id;
+        [System.NonSerialized] public SimpleNetwork _sn;
         private Object[] obj;
-        private string err = "SimpleNetworkError: Could not find {0}] in received value.";
-
+        private string err = "SimpleNetworkError: Could not find {0} in received value.";
 
         private void I() { SimpleNetworkInit(); }
         public void SimpleNetworkInit()
@@ -24,11 +23,13 @@ namespace tutinoco
             _sn.SetBehaviour(this);
         }
 
-        public void _ReceiveEvent(Object[] evObj) {
+        public void ReceivesEvent(Object[] evObj) {
             obj = evObj;
             string name = (string)evObj[(int)EvObj.Name];
             var value = evObj[(int)EvObj.Value];
             ReceiveEvent(name);
+
+            if( value == null ) return;
 
             Type t = value.GetType();
             if( t == typeof(bool) ) ReceiveEvent(name, (bool)value);
@@ -77,7 +78,11 @@ namespace tutinoco
         public virtual void ReceiveEvent(string name, Color32 value) { }
         public virtual void ReceiveEvent(string name, Object[] value) { }
 
-        public object[] Pack(params object[] args) { return args; }
+        public Object[] Pack(params Object[] args) { return (Object[])args.Clone(); }
+
+        public bool IsMaster() { return Networking.IsMaster; }
+        public bool IsOwner( SimpleNetworkBehaviour b=null ) { b=b??this; return Networking.IsOwner(b.gameObject); }
+        public bool IsMe( VRCPlayerApi p ) { return Networking.LocalPlayer == p; }
 
         private int FindValue( Object[] values, Type type, int idx )
         {
@@ -85,17 +90,20 @@ namespace tutinoco
             return -1;
         }
 
-        public SimpleNetworkBehaviour Duplicate( Vector3 position, SimpleNetworkBehaviour behaviour=null )
+        public virtual void OnDuplicateComplete( SimpleNetworkBehaviour behaviour ) { }
+        public void Duplicate( SimpleNetworkBehaviour behaviour, Vector3 position, Quaternion rotation )
         {
-            behaviour = behaviour ?? this;
-            _sn.Duplicate(behaviour, position);
-            return behaviour;
+            RequestEvent(RequestTo.Master, "__DUPLICATE__", Pack(behaviour, position, rotation));
         }
 
         // meta
         public int GetDelay() { return (int)obj[(int)EvObj.Delay]; }
-        public object[] GetValues() { var v=obj[(int)EvObj.Value]; return v.GetType()==typeof(Object[])?(Object[])v:new Object[]{v}; }
+        public object[] GetValues() { var v=obj[(int)EvObj.Value]; return v==null?new Object[0]:(v.GetType()==typeof(Object[])?(Object[])v:new Object[]{v}); }
         public SimpleNetworkBehaviour GetSource() { return (SimpleNetworkBehaviour)obj[(int)EvObj.Source]; }
+
+        // void
+        public void ExecEvent(string name) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.Self), name, null, 0}); }
+        public void SendEvent(string name) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.All), name, null, 0}); }
 
         // bool
         public void ExecEvent(string name, bool value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.Self), name, value, delay}); }
@@ -161,6 +169,32 @@ namespace tutinoco
         public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
         public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
         public Vector3 GetVector3(int i=0) {  Object[] v=GetValues(); i=FindValue(v,typeof(Vector3),i); if(i==-1)Debug.LogError(string.Format(err,"Vector3")); return (Vector3)v[i]; }
+
+        // Quaternion
+        public void ExecEvent(string name, Quaternion value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.Self), name, value, delay}); }
+        public void SendEvent(string name, Quaternion value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void SendEvent(SendTo sendto, string name, Quaternion value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void SendEvent(VRCPlayerApi sendto, string name, Quaternion value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, string name, Quaternion value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, string name, Quaternion value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public Quaternion GetQuaternion(int i=0) {  Object[] v=GetValues(); i=FindValue(v,typeof(Quaternion),i); if(i==-1)Debug.LogError(string.Format(err,"Quaternion")); return (Quaternion)v[i]; }
+
+        // Behaviour
+        public void ExecEvent(string name, SimpleNetworkBehaviour value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.Self), name, value, delay}); }
+        public void SendEvent(string name, SimpleNetworkBehaviour value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(SendTo.All), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(request), _sn.ToInt(sendto), name, value, delay}); }
+        public SimpleNetworkBehaviour GetBehaviour(int i=0) {  Object[] v=GetValues(); i=FindValue(v,typeof(UdonSharpBehaviour),i); if(i==-1)Debug.LogError(string.Format(err,"SimpleNetworkBehaviour")); return (SimpleNetworkBehaviour)v[i]; }
 
         // Object[]
         public void ExecEvent(string name, Object[] value, int delay=0) { I(); _sn.AddEvent(new Object[]{this, _sn.ToInt(RequestTo.None), _sn.ToInt(SendTo.Self), name, value, delay}); }

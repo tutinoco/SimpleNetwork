@@ -66,10 +66,21 @@ namespace tutinoco
 
             foreach( var evObj in evObjs ) {
                 if( evObj.Length == 0 ) continue;
+
+                // Handle request event.
+                int request = (int)evObj[(int)EvObj.RequestTo];
+                if( request != ToInt(RequestTo.None) ) {
+                    var source = (SimpleNetworkBehaviour)evObj[(int)EvObj.Source];
+                    bool isRequestToSelf = request==ToInt(RequestTo.Master) && Networking.IsMaster || request==ToInt(RequestTo.Owner) && Networking.IsOwner(source.gameObject);
+                    if( isRequestToSelf ) evObj[(int)EvObj.RequestTo]=ToInt(RequestTo.None);
+                    else { RemoveEvent(evObj); myProxy.SetEvent(evObj); continue; }
+                }
+
+                // Execute event when delay count is met.
                 double delay = (double)evObj[(int)EvObj.Delay];
                 int counter = (int)((delay-(int)delay) * 1000000);
-                if( (int)evObj[(int)EvObj.RequestTo]!=ToInt(RequestTo.None) ) { RemoveEvent(evObj); myProxy.SetEvent(evObj); }
-                else if( (int)delay == counter ){
+                if( (int)delay == counter ){
+                    if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(Object[])){foreach(var w in(Object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("SendEvent: src={0} sendto={1} delay={2} name={3} v={4}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
                     RemoveEvent(evObj);
                     if( (int)evObj[(int)EvObj.SendTo]==ToInt(SendTo.Self) ||
                         (int)evObj[(int)EvObj.SendTo]==ToInt(Networking.LocalPlayer) ) ReceiveEvent(evObj);
@@ -82,15 +93,6 @@ namespace tutinoco
 
         public bool IsReady() { return myProxy != null; }
 
-        public SimpleNetworkBehaviour Duplicate( SimpleNetworkBehaviour behaviour, Vector3 position )
-        {
-            GameObject g = Instantiate(behaviour.gameObject, position, Quaternion.identity);
-            var b = g.GetComponent<SimpleNetworkBehaviour>();
-            b._sn = this;
-            SetBehaviour(b);
-            return b;
-        }
-
         public SimpleNetworkBehaviour GetBehaviour( int id )
         {
             return behaviours[id];
@@ -98,28 +100,22 @@ namespace tutinoco
 
         public int SetBehaviour(SimpleNetworkBehaviour behaviour)
         {
-            if( IsReady() ) {
-                int len = behaviours.Length;
-                SimpleNetworkBehaviour[] tmp = new SimpleNetworkBehaviour[len+1];
-                behaviours.CopyTo(tmp, 0);
-                behaviour._id = len;
-                tmp[len] = behaviour;
-                behaviours = tmp;
-                return len;
-            }
+            behaviour._sn = this;
 
             int idx = behaviours.Length;
-            string x = Networking.GetUniqueName(behaviour.gameObject);
-            for (int i=0; i<behaviours.Length; i++) {
-                string y = Networking.GetUniqueName(behaviours[i].gameObject);
-                if (y.CompareTo(x) > 0) { idx=i; break; }
+            if( !IsReady() ) {
+                string x = Networking.GetUniqueName(behaviour.gameObject);
+                for (int i=0; i<behaviours.Length; i++) {
+                    string y = Networking.GetUniqueName(behaviours[i].gameObject);
+                    if (y.CompareTo(x) > 0) { idx=i; break; }
+                }
             }
-            var temp = new SimpleNetworkBehaviour[behaviours.Length+1];
-            for (int i=0; i<idx; i++) temp[i] = behaviours[i];
+            var tmp = new SimpleNetworkBehaviour[behaviours.Length+1];
+            for (int i=0; i<idx; i++) tmp[i] = behaviours[i];
             behaviour._id = idx;
-            temp[idx] = behaviour;
-            for (int i = idx+1; i<temp.Length; i++) { temp[i]=behaviours[i-1]; temp[i]._id++; }
-            behaviours = temp;
+            tmp[idx] = behaviour;
+            for (int i = idx+1; i<tmp.Length; i++) { tmp[i]=behaviours[i-1]; tmp[i]._id++; }
+            behaviours = tmp;
 
             return idx;
         }
@@ -127,12 +123,12 @@ namespace tutinoco
         public void AddEvent(Object[] evObj)
         {
             int index = -1;
-            for (int i = 0; i < evObjs.Length; i++) if (evObjs[i].Length == 0) { index = i; break; }
+            for (int i=0; i<evObjs.Length; i++) if (evObjs[i].Length==0) { index=i; break; }
             if (index != -1) evObjs[index] = evObj;
             else {
-                Object[][] tmp = new Object[evObjs.Length + 1][];
+                Object[][] tmp = new Object[evObjs.Length+1][];
                 evObjs.CopyTo(tmp, 0);
-                tmp[evObjs.Length] = evObj;
+                tmp[tmp.Length-1] = evObj;
                 evObjs = tmp;
             }
         }
@@ -186,10 +182,10 @@ namespace tutinoco
         {
             for(int i=0; i<proxy.EventLength(); i++) {
                 Object[] evObj = proxy.GetEvent(i);
+                string name = (string)evObj[(int)EvObj.Name];
                 var source = (SimpleNetworkBehaviour)evObj[(int)EvObj.Source];
                 int request = (int)evObj[(int)EvObj.RequestTo];
                 int sendto = (int)evObj[(int)EvObj.SendTo];
-                int delay = (int)evObj[(int)EvObj.Delay];
 
                 if( request == ToInt(RequestTo.Master) && Networking.IsMaster
                  || request == ToInt(RequestTo.Owner) && Networking.IsOwner(source.gameObject)
@@ -212,6 +208,14 @@ namespace tutinoco
                 else if( Networking.LocalPlayer.playerId == sendto ) isReceive = true;
                 if( !isReceive ) continue;
 
+                if( name == "__DUPLICATE__" ) {
+                    Object[] v = (Object[])evObj[(int)EvObj.Value];
+                    var b = Instantiate(((SimpleNetworkBehaviour)v[0]).gameObject, (Vector3)v[1], (Quaternion)v[2]).GetComponent<SimpleNetworkBehaviour>();
+                    SetBehaviour(b);
+                    behaviour.OnDuplicateComplete(b);
+                    continue;
+                }
+
                 ReceiveEvent( evObj );
             }
         }
@@ -219,8 +223,8 @@ namespace tutinoco
         public void ReceiveEvent( Object[] evObj )
         {
             var behaviour = (SimpleNetworkBehaviour)evObj[(int)EvObj.Source];
-            if( isDebugMode ) Debug.Log("ReceiveEvent: src="+behaviour._id+" sendto="+(int)evObj[(int)EvObj.SendTo]+" name="+(string)evObj[(int)EvObj.Name]+" value="+evObj[(int)EvObj.Value]+" delay="+(int)evObj[(int)EvObj.Delay]);
-            behaviour._ReceiveEvent(evObj);
+            if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(Object[])){foreach(var w in(Object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("ReceiveEvent: src={0} sendto={1} delay={2} name={3} v={4}",behaviour._id,evObj[(int)EvObj.SendTo],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
+            behaviour.ReceivesEvent(evObj);
         }
 
         public void OnProxyOwnershipTransferred( SimpleNetworkProxy proxy )
