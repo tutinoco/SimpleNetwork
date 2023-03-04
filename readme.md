@@ -209,11 +209,19 @@ public override void ReceiveEvent(string name)
 ```
 
 ### 制御可能なオブジェクトの複製
+オブジェクトを複製するには`Duplicate()`メソッドを実行します。
 ```C#
-// monsterを複製してx:0 y:0 z:0 に配置
-Monster newMonster = (Monster)Duplicate(monster, new Vector3(0,0,0), Quaternion.identity);
+// monsterをx:0 y:0 z:0の回転していない状態で複製します
+Duplicate(monster, new Vector3(0,0,0), Quaternion.identity); // Quaternionは省略可能
+```
 
-newMonster.SendEvent("Jump", 5.0f); // 複製したオブジェクトにイベントを送信
+複製されたオブジェクトを取得するには、`OnDuplicateComplete()`メソッドをオーバーライドします。
+```C#
+public override void OnDuplicateComplete( SimpleNetworkBehaviour behaviour )
+{
+    Monster newMonster = (Monster)behaviour;
+    newMonster.SendEvent("Jump", 5.0f); // 複製したオブジェクトにイベントを送信
+}
 ```
 
 ## イベントの送信方法
