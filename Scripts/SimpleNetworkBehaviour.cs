@@ -91,9 +91,10 @@ namespace tutinoco
         }
 
         public virtual void OnDuplicateComplete( SimpleNetworkBehaviour behaviour ) { }
+        public void Duplicate( SimpleNetworkBehaviour behaviour, Vector3 position ) { Duplicate(behaviour, position, Quaternion.identity); }
         public void Duplicate( SimpleNetworkBehaviour behaviour, Vector3 position, Quaternion rotation )
         {
-            RequestEvent(RequestTo.Master, "__DUPLICATE__", Pack(behaviour, position, rotation));
+            RequestEvent(RequestTo.Master, "__DUPLICATE__", Pack(behaviour, position, (Quaternion)rotation));
         }
 
         // meta

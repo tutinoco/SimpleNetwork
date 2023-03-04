@@ -106,7 +106,6 @@ namespace tutinoco
         {
             if( !isWaiting ) return;
             count++;
-            isWaiting = false;
             RequestSerialization();
 #if UNITY_EDITOR
             OnPreSerialization();
@@ -221,9 +220,9 @@ namespace tutinoco
             return obj;
         }
 
-
         public override void OnPreSerialization()
         {
+            isWaiting = false;
             sn.OnProxySynced(this);
         }
 
