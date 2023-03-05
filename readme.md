@@ -8,7 +8,7 @@ SimpleNetworkは、[SimpleNetworkUdonBehavior](https://github.com/tutinoco/Simpl
 ## 特徴
 * `SendCustomNetworkEvent`で不可能な引数の送信ができ、メッセージングプログラミングを可能にします。
 * 煩わしい所有権から解放され、権限の無いオブジェクトからも低レイテンシーで高速な通信が行えます。
-* オブジェクトにグループを設定して、複数のオブジェクトにイベントをイテレーション送信できます。◆
+* オブジェクトにグループを設定して、複数のオブジェクトにイベントをイテレーション送信できます。
 * 大量にイベントを発行しても、自動的に全てのイベントを1回の送信にまとめるため、安定して動作します。
 * `All`や`Owner`のほかに、`Master`や`player`を設定して、イベントの受信者を限定することができます。
 * `Master`にイベント送信を依頼するなど、他のプレイヤーにイベントの送信を依頼することができます。
@@ -98,7 +98,7 @@ monster.SendEvent("talk", "僕を捕まえられるかな？");
 ```
 
 ### 対応している型
-現在`bool` `int` `float` `string` `Vector3`の型の送受信に対応しています。
+現在`bool` `int` `float` `string`  `Vector3` `Quaternion` `SimpleNetworkBehavior` `Object[]`の型の送受信に対応しています。
 
 ```C#
 public override void ReceiveEvent(string name)
@@ -123,8 +123,80 @@ public override void ReceiveEvent(string name)
 値の無いイベントの送信も可能です。
 ```C#
 monster.SendEvent("Init");
+monster.SendEvent("Init", none);
+monster.SendEvent("Init", (string)null);
+
+// monster.SendEvent("Init", null); // 型指定の無いnullは残念ながら非対応です ＞＜
+```
+## イベントの送信
+### ローカルイベント実行
+```C#
+// 自分のみイベントを実行
+ExecEvent("Jump", 5.0f);
 ```
 
+### イベントの遅延送信
+```C#
+// 約2秒の120フレーム後にイベント送信
+ExecEvent("Jump", 5.0f, 120); // 自分のみ
+SendEvent("Jump", 5.0f, 120); // 全員
+```
+
+### 送信先の指定
+```C#
+// 全員にイベントを送信（デフォルト）
+SendEvent(SendTo.All, "Jump", 5.0f);
+
+// オブジェクト所有者にイベントを送信
+SendEvent(SendTo.Owner, "Jump", 5.0f);
+
+// インスタンスマスターにイベントを送信
+SendEvent(SendTo.Master, "Jump", 5.0f);
+
+// 自分自身にイベントを送信
+SendEvent(SendTo.Self, "Jump", 5.0f); // ExecEventに同じ
+SendEvent(SendTo.Me, "Jump", 5.0f); // RequestEvent()ではSelfとMeは挙動が異なる
+
+// オブジェクト所有者以外にイベントを送信
+SendEvent(SendTo.NotOwner, "Jump", 5.0f);
+
+// インスタンスマスター以外にイベントを送信
+SendEvent(SendTo.NotMaster, "Jump", 5.0f);
+
+// 自分以外にイベントを送信
+SendEvent(SendTo.NotSelf, "Jump", 5.0f);
+
+// 指定のプレイヤーにイベントを送信
+SendEvent(player, "Jump", 5.0f);
+```
+
+もちろん以下のように送信先を指定した上でイベントの遅延送信を行うこともできます。
+```C#
+// インスタンスマスターに2秒遅延してイベントを送信
+SendEvent(SendTo.Master, "Jump", 5.0f, 120);
+```
+
+### イベント送信の依頼
+`RequestEvent()`メソッドを使うことで、イベントの送信を他のプレイヤーに依頼することができます。
+```C#
+// 【イベントの送信を依頼】
+// インスタンスマスターから全員にイベントを送信するよう依頼
+RequestEvent(RequestTo.Master, "Jump", 5.0f);
+
+// 【SendToと一緒に利用】
+// インスタンスマスターからオブジェクトオーナーにイベントを送信するよう依頼
+RequestEvent(RequestTo.Master, SendTo.Owner, "Jump", 5.0f);
+
+// 【プレイヤーを直接指定】
+// プレイヤーAからプレイヤーBにイベントを送信するよう依頼
+RequestEvent(playerA, playerB, "Jump", 5.0f);
+
+// 【遅延送信と一緒に利用】
+// オブジェクトオーナー側で60フレーム待機してから自分にイベントを送信するよう依頼
+RequestEvent(RequestTo.Owner, SendTo.Me, "Jump", 5.0f, 60);
+```
+
+## 様々な使い方
 ### 複数の値を送受信する
 複数の値を送るには、`Pack()`メソッドを利用します。
 ```C#
@@ -211,7 +283,7 @@ public override void ReceiveEvent(string name)
 ### 制御可能なオブジェクトの複製
 オブジェクトを複製するには`Duplicate()`メソッドを実行します。
 ```C#
-// monsterをx:0 y:0 z:0の回転していない状態で複製します
+// monsterをx:0 y:0 z:0に回転していない状態で複製します
 Duplicate(monster, new Vector3(0,0,0), Quaternion.identity); // Quaternionは省略可能
 ```
 
@@ -224,72 +296,75 @@ public override void OnDuplicateComplete( SimpleNetworkBehaviour behaviour )
 }
 ```
 
-## イベントの送信方法
-### ローカルイベント実行
+### イベントを送信するオブジェクトをグループ指定する
+`SimpleNetworkInit()`メソッドにグループ名を設定すると、イベントのグループ指定送信を行った際にマッチしたグループにイベントを送信することができます。
 ```C#
-// 自分のみイベントを実行
-ExecEvent("Jump", 5.0f);
+void Start()
+{
+    SimpleNetworkInit("Monster");
+}
+```
+例えば、上記のように`Start()`メソッドで初期化する際に`Monster`というグループ名を指定します。
+そして、このオブジェクトが複数存在したとします。
+
+全ての`Monster`に同じイベントを送信するには以下のようにします。
+```C#
+SendEvent("Initialize", false, "Monster");
+```
+つまり、複数のオブジェクトを管理する際にオブジェクトをコレクションする必要は無く、
+これで全ての`Monster`に`Initialize`イベントを送信することができます。
+
+また、`GetIndex()`メソッドを利用することで、イテレーションのインデックスを取得することができます。
+```C#
+public override void ReceiveEvent(string name)
+{
+    // 複数のMonsterを一列に並べて配置
+    if( name == "Initialize" ) gameObject.transform.position = new Vector3(GetIndex(), 0, 0);
+}
 ```
 
-### イベントの遅延送信
+更に、イベントのグループ指定送信にワイルドカードを指定して対象のオブジェクトを選択することができます。
 ```C#
-// 約2秒の120フレーム後にイベント送信
-ExecEvent("Jump", 5.0f, 120); // 自分のみ
-SendEvent("Jump", 5.0f, 120); // 全員
+// MonsterだけでなくMoisterなどにもイベントを送信する
+SendEvent("Initialize", false, "Mo?ster");
+
+// MonsterだけでなくRocksterやPopsterにもイベントを送信する
+SendEvent("Initialize", false, "*ster");
+
+// MonsterだけでなくMondeyやMonoqloなどにもイベントを送信する
+SendEvent("Initialize", false, "Mon*");
 ```
 
-### 送信先の指定
+また、OR`|`やAND`&`を使った対象オブジェクトの選択も可能です。
 ```C#
-// 全員にイベントを送信（デフォルト）
-SendEvent(SendTo.All, "Jump", 5.0f);
+// MonsterとAlienとInvaderにイベントを送信する
+SendEvent("Initialize", false, "Monster|Alien|Invader");
 
-// オブジェクト所有者にイベントを送信
-SendEvent(SendTo.Owner, "Jump", 5.0f);
+// Mから始まりabcを含むグループ名のオブジェクトにイベントを送信する
+SendEvent("Initialize", false, "M*&*abc*");
 
-// インスタンスマスターにイベントを送信
-SendEvent(SendTo.Master, "Jump", 5.0f);
-
-// 自分自身にイベントを送信
-SendEvent(SendTo.Self, "Jump", 5.0f); // ExecEventに同じ
-SendEvent(SendTo.Me, "Jump", 5.0f); // RequestEvent()ではSelfとMeは挙動が異なる
-
-// オブジェクト所有者以外にイベントを送信
-SendEvent(SendTo.NotOwner, "Jump", 5.0f);
-
-// インスタンスマスター以外にイベントを送信
-SendEvent(SendTo.NotMaster, "Jump", 5.0f);
-
-// 自分以外にイベントを送信
-SendEvent(SendTo.NotSelf, "Jump", 5.0f);
-
-// 指定のプレイヤーにイベントを送信
-SendEvent(player, "Jump", 5.0f);
+// Mから始まりabcを含むグループ名または
+// Aから始まりdefを含むグループ名のオブジェクトにイベントを送信する
+SendEvent("Initialize", false, "M*&*abc*|A*&*def*");
 ```
 
-もちろん以下のように送信先を指定した上でイベントの遅延送信を行うこともできます。
+後からグループ名を変更することもできます。
+
 ```C#
-// インスタンスマスターに2秒遅延してイベントを送信
-SendEvent(SendTo.Master, "Jump", 5.0f, 120);
+SetGroupName("Monster-TypeA-001");
 ```
 
-### イベント送信の依頼
-`RequestEvent()`メソッドを使うことで、イベントの送信を他のプレイヤーに依頼することができます。
+グループ名の変更を受け取るには以下のようにします。
 ```C#
-// 【イベントの送信を依頼】
-// インスタンスマスターから全員にイベントを送信するよう依頼
-RequestEvent(RequestTo.Master, "Jump", 5.0f);
+public override void OnChangeGroupName( bool global )
+{
+    string groupName = GetGroupName(); // "Monster-TypeA-001"
+}
+```
 
-// 【SendToと一緒に利用】
-// インスタンスマスターからオブジェクトオーナーにイベントを送信するよう依頼
-RequestEvent(RequestTo.Master, SendTo.Owner, "Jump", 5.0f);
-
-// 【プレイヤーを直接指定】
-// プレイヤーAからプレイヤーBにイベントを送信するよう依頼
-RequestEvent(playerA, playerB, "Jump", 5.0f);
-
-// 【遅延送信と一緒に利用】
-// オブジェクトオーナー側で60フレーム待機してから自分にイベントを送信するよう依頼
-RequestEvent(RequestTo.Owner, SendTo.Me, "Jump", 5.0f, 60);
+また、管理が大変な使い方ですが、グループ名を自分のみ変更することもできます。
+```C#
+SetGroupName("Monster-TypeA-001", false);
 ```
 
 ## その他の機能
@@ -317,4 +392,6 @@ SimpleNetwork.DebugMode(true);
 また、プロキシの`UdonBehaviourSyncMode`は`Manual`に設定されており、同期変数は高速に同期されるので、`SimpleNetwork`の`SendEvent()`は、`SendCustomNetworkEvent()`よりも高速に送受信できます。
 
 ## 注意事項
-・`SendEvent()`メソッドをに値を渡すとき、値渡しでなく参照渡しで渡すと`SendEvent()`を実行した時とは異なる値が送信されることがあります。
+* イベント名に`__DUPLICATE__`と`__SETGROUPNAME__`を利用することはできません。
+* グループ名に`?` `*` `|` `&`を利用することはできません。利用した場合は自動的に取り除かれます。
+* `SimpleNetworkInit`を利用したグループ名を初期化時設定できる機能はローカルで設定されるため、動的なグループ名の設定は予期せぬ動作につながる可能性があります。
