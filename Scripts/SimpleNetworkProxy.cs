@@ -22,6 +22,7 @@ namespace tutinoco
         [UdonSynced(UdonSyncMode.None)] private int[] sources = new int[0];
         [UdonSynced(UdonSyncMode.None)] private int[] requests = new int[0];
         [UdonSynced(UdonSyncMode.None)] private int[] sendtos = new int[0];
+        [UdonSynced(UdonSyncMode.None)] private string[] targets = new string[0];
         [UdonSynced(UdonSyncMode.None)] private int[] delays = new int[0];
 
         [UdonSynced(UdonSyncMode.None)] private bool[] bools = new bool[0];
@@ -73,7 +74,7 @@ namespace tutinoco
 
         public Object[] GetEvent(int idx)
         {
-            Object[] evObj = new Object[] { sn.GetBehaviour(sources[idx]), requests[idx], sendtos[idx], names[idx], null, delays[idx] };
+            Object[] evObj = new Object[] { sn.GetBehaviour(sources[idx]), requests[idx], sendtos[idx], names[idx], null, targets[idx], delays[idx] };
 
             int index = 0;
             int length = lengths[idx];
@@ -99,6 +100,7 @@ namespace tutinoco
             AddElement(ref sources, ((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id);
             AddElement(ref requests, (int)evObj[(int)EvObj.RequestTo]);
             AddElement(ref sendtos, (int)evObj[(int)EvObj.SendTo]);
+            AddElement(ref targets, (string)evObj[(int)EvObj.Target]);
             AddElement(ref delays, (int)evObj[(int)EvObj.Delay]);
         }
 
@@ -120,6 +122,7 @@ namespace tutinoco
             if( sources.Length > 0 ) sources = new int[0];
             if( requests.Length > 0 ) requests = new int[0];
             if( sendtos.Length > 0 ) sendtos = new int[0];
+            if( targets.Length > 0 ) targets = new string[0];
             if( delays.Length > 0 ) delays = new int[0];
             
             if( bools.Length > 0 ) bools = new bool[0];
