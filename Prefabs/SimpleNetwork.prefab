@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 2683903857877545265}
   - component: {fileID: 157995118082092985}
   m_Layer: 0
-  m_Name: Proxy # (72)
+  m_Name: Proxy #72
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -93,7 +93,7 @@ GameObject:
   - component: {fileID: 8023715214064075178}
   - component: {fileID: 9079299358135620481}
   m_Layer: 0
-  m_Name: Proxy # (57)
+  m_Name: Proxy #57
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -174,7 +174,7 @@ GameObject:
   - component: {fileID: 3987141439923706047}
   - component: {fileID: 6819419802730832703}
   m_Layer: 0
-  m_Name: Proxy # (58)
+  m_Name: Proxy #58
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -255,7 +255,7 @@ GameObject:
   - component: {fileID: 7464085256244001301}
   - component: {fileID: 5556437668239000438}
   m_Layer: 0
-  m_Name: Proxy # (44)
+  m_Name: Proxy #44
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -336,7 +336,7 @@ GameObject:
   - component: {fileID: 5883027695296321679}
   - component: {fileID: 259526154825304100}
   m_Layer: 0
-  m_Name: Proxy # (6)
+  m_Name: Proxy #6
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -417,7 +417,7 @@ GameObject:
   - component: {fileID: 4123008500399338338}
   - component: {fileID: 1967557844738363859}
   m_Layer: 0
-  m_Name: Proxy # (19)
+  m_Name: Proxy #19
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -498,7 +498,7 @@ GameObject:
   - component: {fileID: 3474064951866072345}
   - component: {fileID: 66684407257444272}
   m_Layer: 0
-  m_Name: Proxy # (68)
+  m_Name: Proxy #68
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -579,7 +579,7 @@ GameObject:
   - component: {fileID: 1377245610693162475}
   - component: {fileID: 8832385330923278121}
   m_Layer: 0
-  m_Name: Proxy # (77)
+  m_Name: Proxy #77
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -660,7 +660,7 @@ GameObject:
   - component: {fileID: 9172704652898088554}
   - component: {fileID: 5260608108830404010}
   m_Layer: 0
-  m_Name: Proxy # (28)
+  m_Name: Proxy #28
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -741,7 +741,7 @@ GameObject:
   - component: {fileID: 8584939464179129758}
   - component: {fileID: 8648752706149869635}
   m_Layer: 0
-  m_Name: Proxy # (43)
+  m_Name: Proxy #43
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -822,7 +822,7 @@ GameObject:
   - component: {fileID: 4996809371682881882}
   - component: {fileID: 9114730127459578037}
   m_Layer: 0
-  m_Name: Proxy # (20)
+  m_Name: Proxy #20
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -903,7 +903,7 @@ GameObject:
   - component: {fileID: 4098732870043073191}
   - component: {fileID: 4444988538853488159}
   m_Layer: 0
-  m_Name: Proxy # (56)
+  m_Name: Proxy #56
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -984,7 +984,7 @@ GameObject:
   - component: {fileID: 3701976950822360084}
   - component: {fileID: 2042247379849664859}
   m_Layer: 0
-  m_Name: Proxy # (61)
+  m_Name: Proxy #61
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1065,7 +1065,7 @@ GameObject:
   - component: {fileID: 57932355859826863}
   - component: {fileID: 3503026222000857398}
   m_Layer: 0
-  m_Name: Proxy # (79)
+  m_Name: Proxy #79
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1387,7 +1387,7 @@ GameObject:
   - component: {fileID: 682723734359022200}
   - component: {fileID: 1095553090459019728}
   m_Layer: 0
-  m_Name: Proxy # (4)
+  m_Name: Proxy #4
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1468,7 +1468,7 @@ GameObject:
   - component: {fileID: 7376223319112942737}
   - component: {fileID: 1149791591214011463}
   m_Layer: 0
-  m_Name: Proxy # (63)
+  m_Name: Proxy #63
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1549,7 +1549,7 @@ GameObject:
   - component: {fileID: 6378909047246856969}
   - component: {fileID: 3974309232050070640}
   m_Layer: 0
-  m_Name: Proxy # (67)
+  m_Name: Proxy #67
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1630,7 +1630,7 @@ GameObject:
   - component: {fileID: 7957415453049382311}
   - component: {fileID: 7877320250292474327}
   m_Layer: 0
-  m_Name: Proxy # (38)
+  m_Name: Proxy #38
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1711,7 +1711,7 @@ GameObject:
   - component: {fileID: 613022439205048550}
   - component: {fileID: 7407074404443519639}
   m_Layer: 0
-  m_Name: Proxy # (32)
+  m_Name: Proxy #32
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1792,7 +1792,7 @@ GameObject:
   - component: {fileID: 7922297306512006172}
   - component: {fileID: 5306841480161964465}
   m_Layer: 0
-  m_Name: Proxy # (35)
+  m_Name: Proxy #35
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1873,7 +1873,7 @@ GameObject:
   - component: {fileID: 7534031921470119556}
   - component: {fileID: 6197045338204654810}
   m_Layer: 0
-  m_Name: Proxy # (1)
+  m_Name: Proxy #1
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1954,7 +1954,7 @@ GameObject:
   - component: {fileID: 1884932677724541981}
   - component: {fileID: 8645802627148635192}
   m_Layer: 0
-  m_Name: Proxy # (15)
+  m_Name: Proxy #15
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2035,7 +2035,7 @@ GameObject:
   - component: {fileID: 5674001339012419630}
   - component: {fileID: 5149839418813461521}
   m_Layer: 0
-  m_Name: Proxy # (66)
+  m_Name: Proxy #66
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2116,7 +2116,7 @@ GameObject:
   - component: {fileID: 8667617943684490219}
   - component: {fileID: 5479799226969520687}
   m_Layer: 0
-  m_Name: Proxy # (52)
+  m_Name: Proxy #52
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2197,7 +2197,7 @@ GameObject:
   - component: {fileID: 582854518978032439}
   - component: {fileID: 5038807126053081979}
   m_Layer: 0
-  m_Name: Proxy # (30)
+  m_Name: Proxy #30
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2278,7 +2278,7 @@ GameObject:
   - component: {fileID: 2962181990592499362}
   - component: {fileID: 2883995276578271740}
   m_Layer: 0
-  m_Name: Proxy # (70)
+  m_Name: Proxy #70
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2359,7 +2359,7 @@ GameObject:
   - component: {fileID: 2556915681776386533}
   - component: {fileID: 6755922536835310954}
   m_Layer: 0
-  m_Name: Proxy # (55)
+  m_Name: Proxy #55
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2440,7 +2440,7 @@ GameObject:
   - component: {fileID: 5984586295194220267}
   - component: {fileID: 8517619567930298189}
   m_Layer: 0
-  m_Name: Proxy # (24)
+  m_Name: Proxy #24
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2521,7 +2521,7 @@ GameObject:
   - component: {fileID: 7158160522419389553}
   - component: {fileID: 5895558806012530684}
   m_Layer: 0
-  m_Name: Proxy # (39)
+  m_Name: Proxy #39
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2602,7 +2602,7 @@ GameObject:
   - component: {fileID: 2447325760795005134}
   - component: {fileID: 3450213063811985624}
   m_Layer: 0
-  m_Name: Proxy # (18)
+  m_Name: Proxy #18
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2683,7 +2683,7 @@ GameObject:
   - component: {fileID: 173973944360782485}
   - component: {fileID: 6274299629396971628}
   m_Layer: 0
-  m_Name: Proxy # (46)
+  m_Name: Proxy #46
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2764,7 +2764,7 @@ GameObject:
   - component: {fileID: 1000470000027377352}
   - component: {fileID: 6407507452875455565}
   m_Layer: 0
-  m_Name: Proxy # (62)
+  m_Name: Proxy #62
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2845,7 +2845,7 @@ GameObject:
   - component: {fileID: 5358289687640471660}
   - component: {fileID: 709087973459604379}
   m_Layer: 0
-  m_Name: Proxy # (59)
+  m_Name: Proxy #59
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2926,7 +2926,7 @@ GameObject:
   - component: {fileID: 4123438499987990132}
   - component: {fileID: 8108273690363634894}
   m_Layer: 0
-  m_Name: Proxy # (42)
+  m_Name: Proxy #42
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3007,7 +3007,7 @@ GameObject:
   - component: {fileID: 4136156910099643409}
   - component: {fileID: 3868231582082174808}
   m_Layer: 0
-  m_Name: Proxy # (10)
+  m_Name: Proxy #10
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3088,7 +3088,7 @@ GameObject:
   - component: {fileID: 5631073330842634452}
   - component: {fileID: 3234508333061814355}
   m_Layer: 0
-  m_Name: Proxy # (7)
+  m_Name: Proxy #7
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3169,7 +3169,7 @@ GameObject:
   - component: {fileID: 7968766107263424725}
   - component: {fileID: 8114278997223691811}
   m_Layer: 0
-  m_Name: Proxy # (12)
+  m_Name: Proxy #12
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3250,7 +3250,7 @@ GameObject:
   - component: {fileID: 3530588329714595170}
   - component: {fileID: 3275623028830814018}
   m_Layer: 0
-  m_Name: Proxy # (47)
+  m_Name: Proxy #47
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3331,7 +3331,7 @@ GameObject:
   - component: {fileID: 4176044049160759643}
   - component: {fileID: 6309787072657970738}
   m_Layer: 0
-  m_Name: Proxy # (49)
+  m_Name: Proxy #49
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3412,7 +3412,7 @@ GameObject:
   - component: {fileID: 1989420259000976236}
   - component: {fileID: 2508565702340977385}
   m_Layer: 0
-  m_Name: Proxy # (74)
+  m_Name: Proxy #74
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3493,7 +3493,7 @@ GameObject:
   - component: {fileID: 1306602082728089199}
   - component: {fileID: 1637290866962329872}
   m_Layer: 0
-  m_Name: Proxy # (26)
+  m_Name: Proxy #26
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3574,7 +3574,7 @@ GameObject:
   - component: {fileID: 5682869262964785603}
   - component: {fileID: 2810031219793181228}
   m_Layer: 0
-  m_Name: Proxy # (54)
+  m_Name: Proxy #54
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3655,7 +3655,7 @@ GameObject:
   - component: {fileID: 6189932788366522693}
   - component: {fileID: 8436384615654848575}
   m_Layer: 0
-  m_Name: Proxy # (16)
+  m_Name: Proxy #16
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3736,7 +3736,7 @@ GameObject:
   - component: {fileID: 8575889798652231819}
   - component: {fileID: 5440056899569633280}
   m_Layer: 0
-  m_Name: Proxy # (21)
+  m_Name: Proxy #21
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3817,7 +3817,7 @@ GameObject:
   - component: {fileID: 7702461867731449339}
   - component: {fileID: 6491808596467376859}
   m_Layer: 0
-  m_Name: Proxy # (65)
+  m_Name: Proxy #65
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3898,7 +3898,7 @@ GameObject:
   - component: {fileID: 8933822055062233072}
   - component: {fileID: 640654254461969114}
   m_Layer: 0
-  m_Name: Proxy # (22)
+  m_Name: Proxy #22
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3979,7 +3979,7 @@ GameObject:
   - component: {fileID: 2512586014212060260}
   - component: {fileID: 7157776806924429672}
   m_Layer: 0
-  m_Name: Proxy # (11)
+  m_Name: Proxy #11
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4060,7 +4060,7 @@ GameObject:
   - component: {fileID: 3804638505227440412}
   - component: {fileID: 8852509391720955625}
   m_Layer: 0
-  m_Name: Proxy # (0)
+  m_Name: Proxy #0
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4141,7 +4141,7 @@ GameObject:
   - component: {fileID: 9163874525243605440}
   - component: {fileID: 6510207767048168598}
   m_Layer: 0
-  m_Name: Proxy # (23)
+  m_Name: Proxy #23
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4222,7 +4222,7 @@ GameObject:
   - component: {fileID: 6219007211929512499}
   - component: {fileID: 2503423663568349464}
   m_Layer: 0
-  m_Name: Proxy # (53)
+  m_Name: Proxy #53
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4303,7 +4303,7 @@ GameObject:
   - component: {fileID: 1925630832561604308}
   - component: {fileID: 6101815886059481910}
   m_Layer: 0
-  m_Name: Proxy # (40)
+  m_Name: Proxy #40
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4384,7 +4384,7 @@ GameObject:
   - component: {fileID: 6276406799651339883}
   - component: {fileID: 5083976796131575689}
   m_Layer: 0
-  m_Name: Proxy # (37)
+  m_Name: Proxy #37
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4465,7 +4465,7 @@ GameObject:
   - component: {fileID: 5981749944356554705}
   - component: {fileID: 8460034427385027429}
   m_Layer: 0
-  m_Name: Proxy # (29)
+  m_Name: Proxy #29
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4546,7 +4546,7 @@ GameObject:
   - component: {fileID: 3023323315973278136}
   - component: {fileID: 626976185669348174}
   m_Layer: 0
-  m_Name: Proxy # (76)
+  m_Name: Proxy #76
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4627,7 +4627,7 @@ GameObject:
   - component: {fileID: 8985373965670422357}
   - component: {fileID: 3298658369180731369}
   m_Layer: 0
-  m_Name: Proxy # (14)
+  m_Name: Proxy #14
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4708,7 +4708,7 @@ GameObject:
   - component: {fileID: 1898256095335422394}
   - component: {fileID: 34618678905877880}
   m_Layer: 0
-  m_Name: Proxy # (25)
+  m_Name: Proxy #25
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4789,7 +4789,7 @@ GameObject:
   - component: {fileID: 2739952236563949751}
   - component: {fileID: 5940600586553840751}
   m_Layer: 0
-  m_Name: Proxy # (75)
+  m_Name: Proxy #75
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4870,7 +4870,7 @@ GameObject:
   - component: {fileID: 7873959723381175356}
   - component: {fileID: 5736000442012843026}
   m_Layer: 0
-  m_Name: Proxy # (34)
+  m_Name: Proxy #34
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -4951,7 +4951,7 @@ GameObject:
   - component: {fileID: 1500305968250573135}
   - component: {fileID: 6403268448057466970}
   m_Layer: 0
-  m_Name: Proxy # (17)
+  m_Name: Proxy #17
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5032,7 +5032,7 @@ GameObject:
   - component: {fileID: 1262746133724525466}
   - component: {fileID: 5633303794955528144}
   m_Layer: 0
-  m_Name: Proxy # (33)
+  m_Name: Proxy #33
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5113,7 +5113,7 @@ GameObject:
   - component: {fileID: 6022583342073814658}
   - component: {fileID: 7793529388697771988}
   m_Layer: 0
-  m_Name: Proxy # (41)
+  m_Name: Proxy #41
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5194,7 +5194,7 @@ GameObject:
   - component: {fileID: 2370441618569117521}
   - component: {fileID: 491131614593011562}
   m_Layer: 0
-  m_Name: Proxy # (50)
+  m_Name: Proxy #50
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5275,7 +5275,7 @@ GameObject:
   - component: {fileID: 4910934599714441139}
   - component: {fileID: 7679308738010952189}
   m_Layer: 0
-  m_Name: Proxy # (69)
+  m_Name: Proxy #69
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5356,7 +5356,7 @@ GameObject:
   - component: {fileID: 8684320354341502535}
   - component: {fileID: 5887454977866211404}
   m_Layer: 0
-  m_Name: Proxy # (3)
+  m_Name: Proxy #3
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5437,7 +5437,7 @@ GameObject:
   - component: {fileID: 5965931956566463354}
   - component: {fileID: 4640061122551774514}
   m_Layer: 0
-  m_Name: Proxy # (64)
+  m_Name: Proxy #64
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5518,7 +5518,7 @@ GameObject:
   - component: {fileID: 1300033512783372208}
   - component: {fileID: 7978570134712753583}
   m_Layer: 0
-  m_Name: Proxy # (60)
+  m_Name: Proxy #60
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5599,7 +5599,7 @@ GameObject:
   - component: {fileID: 8482099422629323116}
   - component: {fileID: 738676018706750628}
   m_Layer: 0
-  m_Name: Proxy # (78)
+  m_Name: Proxy #78
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5680,7 +5680,7 @@ GameObject:
   - component: {fileID: 7680311334973107083}
   - component: {fileID: 285473911541487852}
   m_Layer: 0
-  m_Name: Proxy # (13)
+  m_Name: Proxy #13
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5761,7 +5761,7 @@ GameObject:
   - component: {fileID: 865314525630370720}
   - component: {fileID: 2297566238263660926}
   m_Layer: 0
-  m_Name: Proxy # (5)
+  m_Name: Proxy #5
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5842,7 +5842,7 @@ GameObject:
   - component: {fileID: 676781945326912422}
   - component: {fileID: 7396308464210335994}
   m_Layer: 0
-  m_Name: Proxy # (73)
+  m_Name: Proxy #73
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -5923,7 +5923,7 @@ GameObject:
   - component: {fileID: 8944822868918298278}
   - component: {fileID: 526749533484610084}
   m_Layer: 0
-  m_Name: Proxy # (2)
+  m_Name: Proxy #2
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6004,7 +6004,7 @@ GameObject:
   - component: {fileID: 3731768538983925747}
   - component: {fileID: 2798958518609405937}
   m_Layer: 0
-  m_Name: Proxy # (8)
+  m_Name: Proxy #8
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6085,7 +6085,7 @@ GameObject:
   - component: {fileID: 5743333564472869080}
   - component: {fileID: 3056614642323750110}
   m_Layer: 0
-  m_Name: Proxy # (36)
+  m_Name: Proxy #36
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6166,7 +6166,7 @@ GameObject:
   - component: {fileID: 9004489548843042452}
   - component: {fileID: 6724327789119365498}
   m_Layer: 0
-  m_Name: Proxy # (31)
+  m_Name: Proxy #31
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6247,7 +6247,7 @@ GameObject:
   - component: {fileID: 1042166960317708204}
   - component: {fileID: 5622384726799743967}
   m_Layer: 0
-  m_Name: Proxy # (27)
+  m_Name: Proxy #27
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6328,7 +6328,7 @@ GameObject:
   - component: {fileID: 4336100124474702120}
   - component: {fileID: 768013032106139978}
   m_Layer: 0
-  m_Name: Proxy # (9)
+  m_Name: Proxy #9
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6409,7 +6409,7 @@ GameObject:
   - component: {fileID: 2108888425967322236}
   - component: {fileID: 9010374355667016496}
   m_Layer: 0
-  m_Name: Proxy # (51)
+  m_Name: Proxy #51
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6490,7 +6490,7 @@ GameObject:
   - component: {fileID: 2690660927952730605}
   - component: {fileID: 6200239156508187702}
   m_Layer: 0
-  m_Name: Proxy # (71)
+  m_Name: Proxy #71
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6571,7 +6571,7 @@ GameObject:
   - component: {fileID: 4626367507699264026}
   - component: {fileID: 6476623328866277060}
   m_Layer: 0
-  m_Name: Proxy # (45)
+  m_Name: Proxy #45
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -6652,7 +6652,7 @@ GameObject:
   - component: {fileID: 3830995865029382550}
   - component: {fileID: 4348544176965340655}
   m_Layer: 0
-  m_Name: Proxy # (48)
+  m_Name: Proxy #48
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

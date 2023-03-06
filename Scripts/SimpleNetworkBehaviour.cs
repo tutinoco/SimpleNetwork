@@ -88,6 +88,9 @@ namespace tutinoco
         public bool IsOwner( SimpleNetworkBehaviour b=null ) { b=b??this; return Networking.IsOwner(b.gameObject); }
         public bool IsMe( VRCPlayerApi p ) { return Networking.LocalPlayer == p; }
 
+        public SimpleNetworkBehaviour[] GetBehaviours() { return _sn.GetBehaviours(); }
+        public SimpleNetworkBehaviour[] GetBehaviours( string group ) { return _sn.GetBehaviours(group); }
+
         private int FindValue( Object[] values, Type type, int idx )
         {
             for(int i=idx; i<values.Length; i++) if( values[i].GetType() == type ) return i;

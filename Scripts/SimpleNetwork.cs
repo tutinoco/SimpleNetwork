@@ -94,6 +94,22 @@ namespace tutinoco
 
         public bool IsReady() { return myProxy != null; }
 
+        public SimpleNetworkBehaviour[] GetBehaviours() { return behaviours; }
+        public SimpleNetworkBehaviour[] GetBehaviours( string group )
+        {
+            SimpleNetworkBehaviour[] list = new SimpleNetworkBehaviour[0];
+
+            foreach( var behaviour in behaviours ) {
+                if( !IsMatch(behaviour._group, group) ) continue;
+                SimpleNetworkBehaviour[] tmp = new SimpleNetworkBehaviour[list.Length+1];
+                list.CopyTo(tmp, 0);
+                tmp[tmp.Length-1] = behaviour;
+                list = tmp;
+            }
+
+            return list;
+        }
+
         public SimpleNetworkBehaviour GetBehaviour( int id )
         {
             return behaviours[id];
@@ -234,17 +250,15 @@ namespace tutinoco
                 b._groupIndex = 0;
                 b.ReceivesEvent(evObj);
             } else {
-                int index = 0;
-                foreach( var behaviour in behaviours ) {
-                    if( !IsMatch(behaviour._group, target) ) continue;
-                    behaviour._groupIndex = index;
-                    behaviour.ReceivesEvent(evObj);
-                    index++;
+                var matchs = GetBehaviours(target);
+                for(int i=0; i<matchs.Length; i++) {
+                    matchs[i]._groupIndex = i;
+                    matchs[i].ReceivesEvent(evObj);
                 }
             }
         }
 
-        public static bool IsMatch(string input, string pattern)
+        private bool IsMatch(string input, string pattern)
         {
             if (string.IsNullOrEmpty(input) || string.IsNullOrEmpty(pattern)) return false;
 
