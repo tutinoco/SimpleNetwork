@@ -35,6 +35,7 @@ namespace tutinoco
         Value,
         Target,
         Delay,
+        Sender,
     }
 
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
@@ -153,6 +154,21 @@ namespace tutinoco
         public void RemoveEvent(object[] evObj)
         {
             for (int i = 0; i < evObjs.Length; i++) if (evObjs[i] == evObj) evObjs[i] = new object[0];
+        }
+
+        public VRCPlayerApi[] GetPlayers()
+        {
+            int max = 0;
+            for(int i=0; i<refer.Length; i++) if( refer[i] > 0 ) max++;
+            VRCPlayerApi[] players = new VRCPlayerApi[max];
+            int cnt = 0;
+            for(int i=0; i<refer.Length; i++) {
+                if( refer[i] > 0 ) {
+                    players[cnt] = VRCPlayerApi.GetPlayerById(i);
+                    cnt++;
+                }
+            }
+            return players;
         }
 
         private bool IsProxyUsed( int i )

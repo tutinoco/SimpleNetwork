@@ -72,7 +72,7 @@ namespace tutinoco
 
         public object[] GetEvent(int idx)
         {
-            object[] evObj = new object[] { sn.GetBehaviour(sources[idx]), requests[idx], sendtos[idx], names[idx], null, targets[idx], delays[idx] };
+            object[] evObj = new object[] { sn.GetBehaviour(sources[idx]), requests[idx], sendtos[idx], names[idx], null, targets[idx], delays[idx], Networking.GetOwner(gameObject) };
 
             int index = 0;
             int length = lengths[idx];

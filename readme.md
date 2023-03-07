@@ -257,23 +257,23 @@ public override void ReceiveEvent(string name)
     // 送信元オブジェクトを取得します
     SimpleNetworkBehaviour behavior = GetSource();
 
-    // 受信したすべての値を受け取ります。
-    Object[] values = GetValues();
-
-    // このイベントがどのくらい遅延して送られたかを取得します
-    int delay = GetDelay();
-
-    // 送信元プレイヤーを取得します◆
+    // 送信元プレイヤーを取得します
     VRCPlayerApi player = GetSender();
 
-    // このイベントが送られたプレイヤー一覧を取得します◆
-    VRCPlayerApi[] players = GetSendToPlayer();
+    // このイベントを受信したプレイヤー一覧を取得します
+    VRCPlayerApi[] players = GetRecipients();
 
-    // このイベントのグループターゲット文字列を取得します◆
+    // このイベントのグループターゲット文字列を取得します
     SimpleNetworkBehaviour[] behaviors = GetTarget();
 
     // グループでイテレートした際のインデックスを取得します
     int index = GetIndex();
+
+    // このイベントがどのくらい遅延して送られたかを取得します
+    int delay = GetDelay();
+
+    // 受信したすべての値を受け取ります。
+    Object[] values = GetValues();
 }
 ```
 
