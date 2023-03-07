@@ -3,8 +3,6 @@ using UnityEngine;
 using VRC.SDKBase;
 using VRC.Udon;
 
-using Object = System.Object;
-
 namespace tutinoco
 {
     public enum SendTo
@@ -17,6 +15,7 @@ namespace tutinoco
         NotMaster,
         NotSelf,
         Me,
+        Length,
     }
 
     public enum RequestTo
@@ -24,6 +23,7 @@ namespace tutinoco
         None,
         Owner,
         Master,
+        Length,
     }
 
     public enum EvObj
@@ -42,7 +42,7 @@ namespace tutinoco
     {
         private bool isDebugMode;
 
-        private Object[][] evObjs = new Object[0][];
+        private object[][] evObjs = new object[0][];
         private SimpleNetworkBehaviour[] behaviours = new SimpleNetworkBehaviour[0];
         [SerializeField] private SimpleNetworkProxy[] proxys;
         private SimpleNetworkProxy myProxy;
@@ -70,10 +70,10 @@ namespace tutinoco
 
                 // Handle request event.
                 int request = (int)evObj[(int)EvObj.RequestTo];
-                if( request != ToInt(RequestTo.None) ) {
+                if( request != (int)RequestTo.None ) {
                     var source = (SimpleNetworkBehaviour)evObj[(int)EvObj.Source];
-                    bool isRequestToSelf = request==ToInt(RequestTo.Master) && Networking.IsMaster || request==ToInt(RequestTo.Owner) && Networking.IsOwner(source.gameObject);
-                    if( isRequestToSelf ) evObj[(int)EvObj.RequestTo]=ToInt(RequestTo.None);
+                    bool isRequestToSelf = request==(int)RequestTo.Master && Networking.IsMaster || request==(int)RequestTo.Owner && Networking.IsOwner(source.gameObject);
+                    if( isRequestToSelf ) evObj[(int)EvObj.RequestTo]=(int)RequestTo.None;
                     else { RemoveEvent(evObj); myProxy.SetEvent(evObj); continue; }
                 }
 
@@ -81,10 +81,10 @@ namespace tutinoco
                 double delay = (double)evObj[(int)EvObj.Delay];
                 int counter = (int)((delay-(int)delay) * 1000000);
                 if( (int)delay == counter ){
-                    if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(Object[])){foreach(var w in(Object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("SendEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],((string)evObj[(int)EvObj.Target]=="")?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
+                    if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(object[])){foreach(var w in(object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("SendEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],((string)evObj[(int)EvObj.Target]=="")?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
                     RemoveEvent(evObj);
-                    if( (int)evObj[(int)EvObj.SendTo]==ToInt(SendTo.Self) ||
-                        (int)evObj[(int)EvObj.SendTo]==ToInt(Networking.LocalPlayer) ) ReceiveEvent(evObj, (string)evObj[(int)EvObj.Target]);
+                    if( (int)evObj[(int)EvObj.SendTo]==(int)SendTo.Self ||
+                        (int)evObj[(int)EvObj.SendTo]==Networking.LocalPlayer.playerId+(int)SendTo.Length ) ReceiveEvent(evObj, (string)evObj[(int)EvObj.Target]);
                     else myProxy.SetEvent(evObj);
                 }
             }
@@ -137,22 +137,22 @@ namespace tutinoco
             return idx;
         }
 
-        public void AddEvent(Object[] evObj)
+        public void AddEvent(object[] evObj)
         {
             int index = -1;
             for (int i=0; i<evObjs.Length; i++) if (evObjs[i].Length==0) { index=i; break; }
             if (index != -1) evObjs[index] = evObj;
             else {
-                Object[][] tmp = new Object[evObjs.Length+1][];
+                object[][] tmp = new object[evObjs.Length+1][];
                 evObjs.CopyTo(tmp, 0);
                 tmp[tmp.Length-1] = evObj;
                 evObjs = tmp;
             }
         }
 
-        public void RemoveEvent(Object[] evObj)
+        public void RemoveEvent(object[] evObj)
         {
-            for (int i = 0; i < evObjs.Length; i++) if (evObjs[i] == evObj) evObjs[i] = new Object[0];
+            for (int i = 0; i < evObjs.Length; i++) if (evObjs[i] == evObj) evObjs[i] = new object[0];
         }
 
         private bool IsProxyUsed( int i )
@@ -179,53 +179,37 @@ namespace tutinoco
             refer[i] = 0;
         }
 
-        public int ToInt( SendTo sendto )
-        {
-            if( sendto == SendTo.Me ) return Networking.LocalPlayer.playerId;
-            return proxys.Length + (int)sendto;
-        }
-
-        public int ToInt( RequestTo request )
-        {
-            return proxys.Length + (int)request;
-        }
-
-        public int ToInt( VRCPlayerApi player )
-        {
-            return player.playerId;
-        }
-
         public void OnProxySynced( SimpleNetworkProxy proxy )
         {
             for(int i=0; i<proxy.EventLength(); i++) {
-                Object[] evObj = proxy.GetEvent(i);
+                object[] evObj = proxy.GetEvent(i);
                 string name = (string)evObj[(int)EvObj.Name];
                 var source = (SimpleNetworkBehaviour)evObj[(int)EvObj.Source];
                 int request = (int)evObj[(int)EvObj.RequestTo];
                 int sendto = (int)evObj[(int)EvObj.SendTo];
 
-                if( request == ToInt(RequestTo.Master) && Networking.IsMaster
-                 || request == ToInt(RequestTo.Owner) && Networking.IsOwner(source.gameObject)
-                 || request == Networking.LocalPlayer.playerId ) {
-                    evObj[(int)EvObj.RequestTo]=ToInt(RequestTo.None);
+                if( request == (int)RequestTo.Master && Networking.IsMaster
+                 || request == (int)RequestTo.Owner && Networking.IsOwner(source.gameObject)
+                 || request == Networking.LocalPlayer.playerId+(int)RequestTo.Length ) {
+                    evObj[(int)EvObj.RequestTo]=(int)RequestTo.None;
                     AddEvent(evObj);
                 }
 
-                if( request != ToInt(RequestTo.None) ) continue;
+                if( request != (int)RequestTo.None ) continue;
 
                 bool isReceive = false;
-                if( sendto == proxys.Length+(int)SendTo.All ) isReceive = true;
-                else if( sendto == proxys.Length+(int)SendTo.Owner && Networking.IsOwner(source.gameObject) ) isReceive = true;
-                else if( sendto == proxys.Length+(int)SendTo.Master && Networking.IsMaster ) isReceive = true;
-                else if( sendto == proxys.Length+(int)SendTo.Self && Networking.IsOwner(proxy.gameObject) ) isReceive = true;
-                else if( sendto == proxys.Length+(int)SendTo.NotOwner && !Networking.IsOwner(source.gameObject) ) isReceive = true;
-                else if( sendto == proxys.Length+(int)SendTo.NotMaster && !Networking.IsMaster ) isReceive = true;
-                else if( sendto == proxys.Length+(int)SendTo.NotSelf && !Networking.IsOwner(proxy.gameObject) ) isReceive = true;
-                else if( Networking.LocalPlayer.playerId == sendto ) isReceive = true;
+                if( sendto == (int)SendTo.All ) isReceive = true;
+                else if( sendto == (int)SendTo.Owner && Networking.IsOwner(source.gameObject) ) isReceive = true;
+                else if( sendto == (int)SendTo.Master && Networking.IsMaster ) isReceive = true;
+                else if( sendto == (int)SendTo.Self && Networking.IsOwner(proxy.gameObject) ) isReceive = true;
+                else if( sendto == (int)SendTo.NotOwner && !Networking.IsOwner(source.gameObject) ) isReceive = true;
+                else if( sendto == (int)SendTo.NotMaster && !Networking.IsMaster ) isReceive = true;
+                else if( sendto == (int)SendTo.NotSelf && !Networking.IsOwner(proxy.gameObject) ) isReceive = true;
+                else if( Networking.LocalPlayer.playerId == sendto+(int)SendTo.Length ) isReceive = true;
                 if( !isReceive ) continue;
 
                 if( name == "__DUPLICATE__" ) {
-                    Object[] v = (Object[])evObj[(int)EvObj.Value];
+                    object[] v = (object[])evObj[(int)EvObj.Value];
                     var b = Instantiate(((SimpleNetworkBehaviour)v[0]).gameObject, (Vector3)v[1], (Quaternion)v[2]).GetComponent<SimpleNetworkBehaviour>();
                     SetBehaviour(b);
                     source.OnDuplicateComplete(b);
@@ -242,9 +226,9 @@ namespace tutinoco
             }
         }
 
-        public void ReceiveEvent( Object[] evObj, string target )
+        public void ReceiveEvent( object[] evObj, string target )
         {
-            if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(Object[])){foreach(var w in(Object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("ReceiveEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],evObj[(int)EvObj.Target]==""?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
+            if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(object[])){foreach(var w in(object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("ReceiveEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],evObj[(int)EvObj.Target]==""?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
             if( target == "" ) {
                 var b = (SimpleNetworkBehaviour)evObj[(int)EvObj.Source];
                 b._groupIndex = 0;

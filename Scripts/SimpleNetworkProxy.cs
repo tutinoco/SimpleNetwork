@@ -4,8 +4,6 @@ using UnityEngine;
 using VRC.SDKBase;
 using VRC.Udon;
 
-using Object = System.Object;
-
 namespace tutinoco
 {
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
@@ -72,9 +70,9 @@ namespace tutinoco
             return names.Length;
         }
 
-        public Object[] GetEvent(int idx)
+        public object[] GetEvent(int idx)
         {
-            Object[] evObj = new Object[] { sn.GetBehaviour(sources[idx]), requests[idx], sendtos[idx], names[idx], null, targets[idx], delays[idx] };
+            object[] evObj = new object[] { sn.GetBehaviour(sources[idx]), requests[idx], sendtos[idx], names[idx], null, targets[idx], delays[idx] };
 
             int index = 0;
             int length = lengths[idx];
@@ -86,14 +84,14 @@ namespace tutinoco
             return evObj;
         }
 
-        public void SetEvent( Object[] evObj )
+        public void SetEvent( object[] evObj )
         {
             if( !isWaiting ) { ClearEvents(); isWaiting=true; }
 
             var length = 0;
             var value = evObj[(int)EvObj.Value];
-            if( value.GetType() == typeof(Object[]) ) length = SetValues((Object[])value);
-            else length = SetValues(new Object[] {value});
+            if( value!=null && value.GetType()==typeof(object[]) ) length = SetValues((object[])value);
+            else length = SetValues(new object[] {value});
 
             AddElement(ref names, (string)evObj[(int)EvObj.Name]);
             AddElement(ref lengths, length);
@@ -148,7 +146,7 @@ namespace tutinoco
             if( Behaviors.Length > 0 ) Behaviors = new int[0];
         }
 
-        private int SetValues( Object[] vals )
+        private int SetValues( object[] vals )
         {
             int length = 0;
 
@@ -157,30 +155,31 @@ namespace tutinoco
                 int type = -1;
                 int index = 0;
 
-                Type t = v.GetType();
-                if( t == typeof(bool) ) { length++; type=0; index=AddElement(ref bools, (bool)v); }
-                else if( t == typeof(char) ) { length++; type=1; index=AddElement(ref chars, (char)v); }
-                else if( t == typeof(byte) ) { length++; type=2; index=AddElement(ref bytes, (byte)v); }
-                else if( t == typeof(sbyte) ) { length++; type=3; index=AddElement(ref sbytes, (sbyte)v); }
-                else if( t == typeof(short) ) { length++; type=4; index=AddElement(ref shorts, (short)v); }
-                else if( t == typeof(ushort) ) { length++; type=5; index=AddElement(ref ushorts, (ushort)v); }
-                else if( t == typeof(int) ) { length++; type=6; index=AddElement(ref ints, (int)v); }
-                else if( t == typeof(uint) ) { length++; type=7; index=AddElement(ref uints, (uint)v); }
-                else if( t == typeof(long) ) { length++; type=8; index=AddElement(ref longs, (long)v); }
-                else if( t == typeof(ulong) ) { length++; type=9; index=AddElement(ref ulongs, (ulong)v); }
-                else if( t == typeof(float) ) { length++; type=10; index=AddElement(ref floats, (float)v); }
-                else if( t == typeof(double) ) { length++; type=11; index=AddElement(ref doubles, (double)v); }
-                else if( t == typeof(Vector2) ) { length++; type=12; index=AddElement(ref Vector2s, (Vector2)v); }
-                else if( t == typeof(Vector3) ) { length++; type=13; index=AddElement(ref Vector3s, (Vector3)v); }
-                else if( t == typeof(Vector4) ) { length++; type=14; index=AddElement(ref Vector4s, (Vector4)v); }
-                else if( t == typeof(Quaternion) ) { length++; type=15; index=AddElement(ref Quaternions, (Quaternion)v); }
-                else if( t == typeof(string) ) { length++; type=16; index=AddElement(ref strings, (string)v); }
-                else if( t == typeof(VRCUrl) ) { length++; type=17; index=AddElement(ref VRCUrls, (VRCUrl)v); }
-                else if( t == typeof(Color) ) { length++; type=18; index=AddElement(ref Colors, (Color)v); }
-                else if( t == typeof(Color32) ) { length++; type=19; index=AddElement(ref Color32s, (Color32)v); }
-                else if( t == typeof(UdonSharpBehaviour) ) { length++; type=20; index=AddElement(ref Behaviors, ((SimpleNetworkBehaviour)v)._id); }
+                Type t = v==null ? null : v.GetType();
+                
+                if( t == typeof(bool) ) { type=0; index=AddElement(ref bools, (bool)v); }
+                else if( t == typeof(char) ) { type=1; index=AddElement(ref chars, (char)v); }
+                else if( t == typeof(byte) ) { type=2; index=AddElement(ref bytes, (byte)v); }
+                else if( t == typeof(sbyte) ) { type=3; index=AddElement(ref sbytes, (sbyte)v); }
+                else if( t == typeof(short) ) { type=4; index=AddElement(ref shorts, (short)v); }
+                else if( t == typeof(ushort) ) { type=5; index=AddElement(ref ushorts, (ushort)v); }
+                else if( t == typeof(int) ) { type=6; index=AddElement(ref ints, (int)v); }
+                else if( t == typeof(uint) ) { type=7; index=AddElement(ref uints, (uint)v); }
+                else if( t == typeof(long) ) { type=8; index=AddElement(ref longs, (long)v); }
+                else if( t == typeof(ulong) ) { type=9; index=AddElement(ref ulongs, (ulong)v); }
+                else if( t == typeof(float) ) { type=10; index=AddElement(ref floats, (float)v); }
+                else if( t == typeof(double) ) { type=11; index=AddElement(ref doubles, (double)v); }
+                else if( t == typeof(Vector2) ) { type=12; index=AddElement(ref Vector2s, (Vector2)v); }
+                else if( t == typeof(Vector3) ) { type=13; index=AddElement(ref Vector3s, (Vector3)v); }
+                else if( t == typeof(Vector4) ) { type=14; index=AddElement(ref Vector4s, (Vector4)v); }
+                else if( t == typeof(Quaternion) ) { type=15; index=AddElement(ref Quaternions, (Quaternion)v); }
+                else if( t == typeof(string) ) { type=16; index=AddElement(ref strings, (string)v); }
+                else if( t == typeof(VRCUrl) ) { type=17; index=AddElement(ref VRCUrls, (VRCUrl)v); }
+                else if( t == typeof(Color) ) { type=18; index=AddElement(ref Colors, (Color)v); }
+                else if( t == typeof(Color32) ) { type=19; index=AddElement(ref Color32s, (Color32)v); }
+                else if( t == typeof(UdonSharpBehaviour) ) { type=20; index=AddElement(ref Behaviors, ((SimpleNetworkBehaviour)v)._id); }
 
-                if( type == -1 ) continue;
+                length++;
 
                 AddElement(ref values, type);
                 AddElement(ref values, index);
@@ -189,15 +188,16 @@ namespace tutinoco
             return length;
         }
 
-        private Object[] GetValues( int index, int length )
+        private object[] GetValues( int index, int length )
         {
-            Object[] obj = new Object[length][];
+            object[] obj = new object[length][];
 
             for(int i=0; i<length; i++) {
                 int t = values[(index+i)*2];
                 int j = values[(index+i)*2+1];
 
-                if( t == 0 ) obj[i] = bools[j];
+                if ( t == -1 ) obj[i] = null;
+                else if( t == 0 ) obj[i] = bools[j];
                 else if( t == 1 ) obj[i] = chars[j];
                 else if( t == 2 ) obj[i] = bytes[j];
                 else if( t == 3 ) obj[i] = sbytes[j];
