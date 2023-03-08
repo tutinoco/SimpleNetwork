@@ -136,27 +136,27 @@ namespace tutinoco
         public int GetDelay() { return (int)obj[(int)EvObj.Delay]; }
         public SimpleNetworkBehaviour GetSource() { return (SimpleNetworkBehaviour)obj[(int)EvObj.Source]; }
         public int GetIndex() { return _groupIndex; }
-        public VRCPlayerApi GetSender() { return (VRCPlayerApi)obj[(int)EvObj.Sender]; }
+        public int GetSender() { return (int)obj[(int)EvObj.Sender]; }
         public string GetTarget() { return (string)obj[(int)EvObj.Target]; }
-        public VRCPlayerApi[] GetRecipients() {
+        public int[] GetRecipients() {
             int sendto = (int)obj[(int)EvObj.SendTo];
             if( sendto < (int)SendTo.Length ) {
                 if( sendto == (int)SendTo.All ) return _sn.GetPlayers();
-                else if( sendto == (int)SendTo.Owner ) return new VRCPlayerApi[] {Networking.GetOwner(((SimpleNetworkBehaviour)obj[(int)EvObj.Source]).gameObject)};
-                else if( sendto == (int)SendTo.Master ) return new VRCPlayerApi[] {Networking.GetOwner(_sn.gameObject)};
-                else if( sendto == (int)SendTo.Self ) return new VRCPlayerApi[] {Networking.LocalPlayer};
-                else if( sendto == (int)SendTo.NotOwner ) return RemovePlayer(_sn.GetPlayers(), Networking.GetOwner(((SimpleNetworkBehaviour)obj[(int)EvObj.Source]).gameObject));
-                else if( sendto == (int)SendTo.NotMaster ) return RemovePlayer(_sn.GetPlayers(), Networking.GetOwner(_sn.gameObject));
-                else if( sendto == (int)SendTo.NotSelf ) return RemovePlayer(_sn.GetPlayers(), Networking.LocalPlayer);
+                else if( sendto == (int)SendTo.Owner ) return new int[] {Networking.GetOwner(((SimpleNetworkBehaviour)obj[(int)EvObj.Source]).gameObject).playerId};
+                else if( sendto == (int)SendTo.Master ) return new int[] {Networking.GetOwner(_sn.gameObject).playerId};
+                else if( sendto == (int)SendTo.Self ) return new int[] {Networking.LocalPlayer.playerId};
+                else if( sendto == (int)SendTo.NotOwner ) return RemovePlayer(_sn.GetPlayers(), Networking.GetOwner(((SimpleNetworkBehaviour)obj[(int)EvObj.Source]).gameObject).playerId);
+                else if( sendto == (int)SendTo.NotMaster ) return RemovePlayer(_sn.GetPlayers(), Networking.GetOwner(_sn.gameObject).playerId);
+                else if( sendto == (int)SendTo.NotSelf ) return RemovePlayer(_sn.GetPlayers(), Networking.LocalPlayer.playerId);
             }
-            return new VRCPlayerApi[] {VRCPlayerApi.GetPlayerById(sendto-(int)SendTo.Length)};
+            return new int[] {sendto-(int)SendTo.Length};
         }
 
-        private VRCPlayerApi[] RemovePlayer(VRCPlayerApi[] arr, VRCPlayerApi player)
+        private int[] RemovePlayer(int[] arr, int player)
         {
             int index = Array.IndexOf(arr, player);
             if (index >= 0) {
-                VRCPlayerApi[] newArr = new VRCPlayerApi[arr.Length-1];
+                int[] newArr = new int[arr.Length-1];
                 Array.Copy(arr, 0, newArr, 0, index);
                 Array.Copy(arr, index + 1, newArr, index, arr.Length - index - 1);
                 return newArr;

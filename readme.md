@@ -98,8 +98,8 @@ monster.SendEvent("talk", "僕を捕まえられるかな？");
 ```
 
 ### 色々な型の送受信
-`bool` `char` `byte` `sbyte` `short` `ushort` `int` `uint` `long` `ulong` `float` `double` `Vector2` `Vector3` `Vector4` `Quaternion` `string` `VRCUrl` `Color` `Color32` に加え
-`VRCPlayerApi`♦ `Object[]` `SimpleNetworkBehaviour`の送受信に対応しています。
+`bool` `char` `byte` `sbyte` `short` `ushort` `int` `uint` `long` `ulong` `float` `double` `Vector2` `Vector3` `Vector4` `Quaternion` `string` `VRCUrl` `Color` `Color32`に加え
+`Object[]` `SimpleNetworkBehaviour`の送受信に対応しています。
 
 現在、`Object[]`以外の配列の送受信は非対応です。
 ```C#
@@ -257,11 +257,11 @@ public override void ReceiveEvent(string name)
     // 送信元オブジェクトを取得します
     SimpleNetworkBehaviour behavior = GetSource();
 
-    // 送信元プレイヤーを取得します
-    VRCPlayerApi player = GetSender();
+    // 送信元プレイヤーIDを取得します
+    int player = GetSender();
 
-    // このイベントを受信したプレイヤー一覧を取得します
-    VRCPlayerApi[] players = GetRecipients();
+    // このイベントを受信したプレイヤーIDの一覧を取得します
+    int[] players = GetRecipients();
 
     // このイベントのグループターゲット文字列を取得します
     SimpleNetworkBehaviour[] behaviors = GetTarget();
@@ -331,7 +331,8 @@ public class Monster : SimpleNetworkBehaviour
 
         // 【プレイヤーを見る】
         if( name == "See" ) {
-            VRCPlayerApi target = GetVRCPlayerApi();
+            int playerId = GetInt();
+            VRCPlayerApi target = VRCPlayerApi.GetPlayerById(playerId);
             gameObject.transform.LookAt(target.transform);
         }
     }
@@ -369,7 +370,7 @@ public class Main : SimpleNetworkBehaviour // Mainクラスでも継承する
 
     public override void OnPlayerJoined(VRCPlayerApi player)
     {
-        target = player; 
+        target = player.playerId;
     }
 
 }

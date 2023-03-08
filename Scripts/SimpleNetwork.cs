@@ -156,15 +156,15 @@ namespace tutinoco
             for (int i = 0; i < evObjs.Length; i++) if (evObjs[i] == evObj) evObjs[i] = new object[0];
         }
 
-        public VRCPlayerApi[] GetPlayers()
+        public int[] GetPlayers()
         {
             int max = 0;
             for(int i=0; i<refer.Length; i++) if( refer[i] > 0 ) max++;
-            VRCPlayerApi[] players = new VRCPlayerApi[max];
+            int[] players = new int[max];
             int cnt = 0;
             for(int i=0; i<refer.Length; i++) {
                 if( refer[i] > 0 ) {
-                    players[cnt] = VRCPlayerApi.GetPlayerById(i);
+                    players[cnt] = i;
                     cnt++;
                 }
             }
