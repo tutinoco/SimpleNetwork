@@ -22,6 +22,7 @@ namespace tutinoco
         [UdonSynced(UdonSyncMode.None)] private int[] sendtos = new int[0];
         [UdonSynced(UdonSyncMode.None)] private string[] targets = new string[0];
         [UdonSynced(UdonSyncMode.None)] private int[] delays = new int[0];
+        [UdonSynced(UdonSyncMode.None)] private int[] joinsyncs = new int[0];
 
         [UdonSynced(UdonSyncMode.None)] private bool[] bools = new bool[0];
         [UdonSynced(UdonSyncMode.None)] private char[] chars = new char[0];
@@ -72,7 +73,17 @@ namespace tutinoco
 
         public object[] GetEvent(int idx)
         {
-            object[] evObj = new object[] { sn.GetBehaviour(sources[idx]), requests[idx], sendtos[idx], names[idx], null, targets[idx], delays[idx], Networking.GetOwner(gameObject).playerId };
+            object[] evObj = new object[] {
+                sn.GetBehaviour(sources[idx]),
+                requests[idx],
+                sendtos[idx],
+                names[idx],
+                null,
+                targets[idx],
+                delays[idx],
+                joinsyncs[idx],
+                Networking.GetOwner(gameObject).playerId
+            };
 
             int index = 0;
             int length = lengths[idx];
@@ -100,6 +111,7 @@ namespace tutinoco
             AddElement(ref sendtos, (int)evObj[(int)EvObj.SendTo]);
             AddElement(ref targets, (string)evObj[(int)EvObj.Target]);
             AddElement(ref delays, (int)evObj[(int)EvObj.Delay]);
+            AddElement(ref joinsyncs, (int)evObj[(int)EvObj.JoinSync]);
         }
 
         public void SyncEvents()
@@ -122,6 +134,7 @@ namespace tutinoco
             if( sendtos.Length > 0 ) sendtos = new int[0];
             if( targets.Length > 0 ) targets = new string[0];
             if( delays.Length > 0 ) delays = new int[0];
+            if( joinsyncs.Length > 0 ) joinsyncs = new int[0];
             
             if( bools.Length > 0 ) bools = new bool[0];
             if( chars.Length > 0 ) chars = new char[0];
