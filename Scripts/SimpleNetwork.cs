@@ -35,7 +35,15 @@ namespace tutinoco
         Value,
         Target,
         Delay,
+        JoinSync,
         Sender,
+    }
+
+    public enum JoinSync
+    {
+        None,
+        Latest,
+        Logging,
     }
 
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
