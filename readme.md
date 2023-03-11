@@ -12,11 +12,9 @@ SimpleNetworkは、[SimpleNetworkUdonBehavior](https://github.com/tutinoco/Simpl
 * 大量にイベントを発行しても、自動的に全てのイベントを1回の送信にまとめるため、安定して動作します。
 * `All`や`Owner`のほかに、`Master`やプレイヤーを直接設定して、イベント受信者を限定することができます。
 * `Master`にイベント送信を依頼するなど、他のプレイヤーにイベントの送信を依頼することができます。
-* 最後に実行したイベントやイベント履歴をサーバに保存し、後から参加したプレイヤーに送信することができます。◆
+* 最後に実行したイベントやイベント履歴をサーバに保存し、後から参加したプレイヤーに送信することができます。
 * `SendCustomNetworkEventDelayedFrames`に相当する、ネットワークイベントの遅延送信が可能です。
 * シーンに存在しない動的に生成したオブジェクトに対しても通信が可能です。
-
-◆の機能はまだ実装中です。
 
 ## 使い方
 `SimpleNetwork.prefab`をシーンに配置し、適当なクラスを作成して`SimpleNetworkBehaviour`を継承すると、`SendEvent()`メソッドで、全てのプレイヤー（自分自身を含む）のオブジェクトに値を送信することができます。
@@ -468,8 +466,33 @@ public override void OnChangeGroupName( bool global ) // グローバルな変�
 SetGroupName("Monster-TypeA-001", false); // グループ名の変更を同期せず自分のみ変える
 ```
 
+### 参加同期
+SimpleNetworkでは、最後に実行したイベントやイベント履歴をサーバに保存して、後から参加したプレイヤーに送信することができます。
+サーバに値を保存するには次のようにします。
+```C#
+// 最後に実行したSetPositionイベントを後から参加したプレイヤーに送信する形でイベントを実行
+SendEvent("SetPosition", pos, JoinSync.Latest);
+
+// 今まで実行したDrawLineイベントを後から参加したプレイヤーに連続的に送信する形でイベントを実行
+SendEvent("DrawLine", pos, JoinSync.Logging);
+```
+
+グループと併用することも可能です
+```C#
+// 全てのドミノをtype1でリセットしたことを後から参加したプレイヤーに送信する形でリセットする
+int type = 1;
+SendEvent("Reset", type, "Domino", JoinSync.Latest);
+```
+
+サーバに保存されている値を削除するには`ClearJoinSync()`メソッドを実行します
+```C#
+ClearJoinSync(); // このオブジェクトに保存された全てのイベント履歴を削除
+ClearJoinSync("Monster|Alien"); // MonsterとAlienに保存された全てのイベント履歴を削除
+ClearJoinSync(monster); // 指定したオブジェクトに保存された全てのイベント履歴を削除
+```
+
 ### デバッグ
-SimpleNetworkBehaviourが送受信したデータの内容を確認するにはデバッグモードを有効にします。
+SimpleNetworkが送受信したデータの内容を確認するにはデバッグモードを有効にします。
 ```C#
 // Debug.Logに送信されたコマンド等が送られる
 SimpleNetwork.DebugMode(true);

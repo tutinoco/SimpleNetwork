@@ -131,6 +131,11 @@ namespace tutinoco
         public virtual void ReceiveEvent(string name, Color32 value) { }
         public virtual void ReceiveEvent(string name, object[] value) { }
 
+        // JoinSync
+        public void ClaerJoinSync( string target ) { _sn.ClearJoinSync(target); }
+        public void ClaerJoinSync( SimpleNetworkBehaviour behaviour ) { _sn.ClearJoinSync(behaviour); }
+        public void ClaerJoinSync() { _sn.ClearJoinSync(this); }
+
         // Meta
         public int GetDelay() { return (int)obj[(int)EvObj.Delay]; }
         public SimpleNetworkBehaviour GetSource() { return (SimpleNetworkBehaviour)obj[(int)EvObj.Source]; }
