@@ -95,7 +95,7 @@ monster.SendEvent("warp", new Vector3(1.0f, 2.0f, 3.0f));
 monster.SendEvent("talk", "僕を捕まえられるかな？");
 ```
 
-### 色々な型の送受信
+### 様々な型の送受信
 `bool` `char` `byte` `sbyte` `short` `ushort` `int` `uint` `long` `ulong` `float` `double` `Vector2` `Vector3` `Vector4` `Quaternion` `string` `VRCUrl` `Color` `Color32`に加え
 `Object[]` `SimpleNetworkBehaviour`の送受信に対応しています。
 
@@ -184,15 +184,17 @@ RequestEvent(RequestTo.Master, "Jump", 5.0f);
 // インスタンスマスターからオブジェクトオーナーにイベントを送信するよう依頼
 RequestEvent(RequestTo.Master, SendTo.Owner, "Jump", 5.0f);
 
-// プレイヤーAからプレイヤーBにイベントを送信するよう依頼
-RequestEvent(playerA, playerB, "Jump", 5.0f);
+// プレイヤー1からプレイヤー2にイベントを送信するよう依頼
+VRCPlayerApi player1 = VRCPlayerApi.GetPlayerById(1);
+VRCPlayerApi player2 = VRCPlayerApi.GetPlayerById(2);
+RequestEvent(player1, player2, "Jump", 5.0f);
 
 // オブジェクトオーナー側で60フレーム待機してから自分にイベントを送信するよう依頼
 RequestEvent(RequestTo.Owner, SendTo.Me, "Jump", 5.0f, 60);
 ```
 
 ### 複数の値を送信する
-複数の値を送るには、`Pack()`メソッドを利用します。
+複数の値を送るには、`Pack()`メソッドを利用して値をまとめます。
 ```C#
 Vector3 position = Vector3(1.0f, 2.0f, 3.0f);
 Quaternion rotation = Quaternion.identity;
@@ -203,10 +205,9 @@ monster.SendEvent("warp2", Pack(position, rotation));
 `Main`クラスの役割を果たしているクラスでも`SimpleNetworkBehaviour`を継承することをお勧めしますが、
 万が一呼び出し元が`SimpleNetworkBehaviour`のサブクラスでない等、`Pack`メソッドを利用できない場合には、以下のように`Object[]`を利用します。
 ```C#
-Objects[] values = new Objects[] {position, rotation}; // Objects[]に格納して
+object[] values = new object[] {position, rotation}; // object[]に格納して
 monster.SendEvent("warp2", values); // 送信する。
 ```
-上記コードは`using Object = System.Object;`を追加する必要があるかもしれません。
 
 複数の値を受信するには、以下のように値の引数番号を指定します。
 ```C#
@@ -229,6 +230,7 @@ public override void ReceiveEvent(string name)
 ExecEvent(名前, 値, グループ指定, 遅延);
 SendEvent(送信先, 名前, 値, グループ指定, 遅延, 参加同期);
 RequestEvent(依頼先, 送信先, 名前, 値, グループ指定, 遅延, 参加同期);
+CreateEvent(依頼先, 送信先, 名前, 値, グループ指定, 遅延, 参加同期);
 ```
 各イベント送信メソッドのパラメータの設定方法は上記の通りで、`名前`以外は省略することができます。
 設定可能な型は以下の通りです。
@@ -238,7 +240,7 @@ RequestEvent(依頼先, 送信先, 名前, 値, グループ指定, 遅延, 参�
 * 値：送信する値を設定します。対応している型は、[色々な型の送受信](#色々な型の送受信)を参照してください。
 * グループ指定：`string`型でグループ名を指定してイベントを受信するオブジェクトを選択します。
 * 遅延：`int`型でフレーム数を設定し、イベントの送信を遅らせます。
-* 参加同期：`JoinSync`型で、ワールドに参加したユーザに同期するイベントを設定します。
+[](* 参加同期：`JoinSync`型で、ワールドに参加したユーザに同期するイベントを設定します。)
 
 ### ２つの受信方法
 SimpleNetworkではイベントを受信する方法に「ダイレクトレシーブ」と「インディレクトレシーブ」が存在します。
@@ -279,7 +281,7 @@ public override void ReceiveEvent(string name)
     int[] players = GetRecipients();
 
     // このイベントのグループターゲット文字列を取得します
-    SimpleNetworkBehaviour[] behaviors = GetTarget();
+    string target = GetTarget();
 
     // グループでイテレートした際のインデックスを取得します
     int index = GetIndex();
@@ -289,6 +291,9 @@ public override void ReceiveEvent(string name)
 
     // 受信したすべての値を受け取ります。
     Object[] values = GetValues();
+
+    // 指定した型が受信した値の何番目にあるか取得。無ければ-1が返ります。
+    int argIndex = IndexOf(typeof(int));
 }
 ```
 
@@ -448,47 +453,66 @@ SendEvent("Initialize", none, "M*&*abc*|A*&*def*");
 
 ### グループ名の変更
 初期化時に設定したグループ名は、後から変更することもできます。
-
 ```C#
 SetGroupName("Monster-TypeA-001");
 ```
+`SetGroupName`によるグループ名の変更は、ローカルのみで実行されるため、安易に利用すると他ユーザのオブジェクトがイベントを受け取れなくなる可能性あるため利用には注意が必要です。
 
-グループ名の変更を受け取るには以下のようにします。
+### イベントの作成
+イベントを送信せず、前もってイベントオブジェクトを作成しておくことができます。
 ```C#
-public override void OnChangeGroupName( bool global ) // グローバルな変更が行われたらtrue
-{
-    string groupName = GetGroupName(); // "Monster-TypeA-001"
-}
-```
+// インスタンスマスターに2秒遅延して実行させるイベントを作成
+object[] evObj = CreateEvent(RequestTo.Master, SendTo.Self, "Jump", 7.0f, "Monster", 120);
 
-また、他のプレイヤーのPC上で挙動が変わるためお勧めできませんが、第二引数に`false`を指定することで、グループ名をローカルでのみ変更することもできます。
-```C#
-SetGroupName("Monster-TypeA-001", false); // グループ名の変更を同期せず自分のみ変える
+// イベントオブジェクトを使ってイベントを送信
+RequestEvent(evObj);
+
+// こうするとRequestToやSendToは無視して実行されます
+SendEvent(evObj); // RequestToを無視して送信
+ExecEvent(evObj); // RequestToとSendToを無視して実行
 ```
 
 ### 参加同期
 SimpleNetworkでは、最後に実行したイベントやイベント履歴をサーバに保存して、後から参加したプレイヤーに送信することができます。
 サーバに値を保存するには次のようにします。
 ```C#
-// 最後に実行したSetPositionイベントを後から参加したプレイヤーに送信する形でイベントを実行
-SendEvent("SetPosition", pos, JoinSync.Latest);
+// 後から参加したプレイヤーにもSetPositionイベントを送信するよう設定
+object[] evObj = SendEvent("SetPosition", pos);
+SetJoinEvent(evObj);
 
-// 今まで実行したDrawLineイベントを後から参加したプレイヤーに連続的に送信する形でイベントを実行
-SendEvent("DrawLine", pos, JoinSync.Logging);
+// 後から参加したプレイヤーにDrawLineイベント履歴を連続的に送信するよう設定
+object[] evObj = SendEvent("DrawLine", pos);
+LoggedJoinEvent(evObj);
+
+// CreateEvent()メソッドを使うことで
+// イベントを送信せずに参加同期イベント登録のみ行うことも可能です
+object[] evObj = CreateEvent("SetPosition", pos);
+SetJoinEvent(evObj);
 ```
 
 グループと併用することも可能です
 ```C#
 // 全てのドミノをtype1でリセットしたことを後から参加したプレイヤーに送信する形でリセットする
 int type = 1;
-SendEvent("Reset", type, "Domino", JoinSync.Latest);
+SetJoinEvent(SendEvent("Reset", type, "Domino"));
 ```
 
-サーバに保存されている値を削除するには`ClearJoinSync()`メソッドを実行します
+サーバに保存されている値を削除するには`ClearJoinEvent()`メソッドを実行します
 ```C#
-ClearJoinSync(); // このオブジェクトに保存された全てのイベント履歴を削除
-ClearJoinSync("Monster|Alien"); // MonsterとAlienに保存された全てのイベント履歴を削除
-ClearJoinSync(monster); // 指定したオブジェクトに保存された全てのイベント履歴を削除
+ClearJoinEvent(); // このオブジェクトに保存された全てのイベント履歴を削除
+ClearJoinEvent("Monster|Alien"); // MonsterとAlienに保存された全てのイベント履歴を削除
+ClearJoinEvent(monster); // 指定したオブジェクトに保存された全てのイベント履歴を削除
+```
+
+### 複雑なイベント送信
+依頼先指定、送信先指定、グループ指定、遅延、参加同期など、すべての機能を使うと以下のような挙動になります。
+
+```C#
+// int型の1とfloat型の2.0fが設定されたHogeHogeイベントをマスターから送信するように依頼。
+// マスターはイベントの送信を120フレーム遅延して実行し
+// オーナー権限を持つ、Mから始まりabcを含むグループ名のオブジェクトにイベントを届けた上で
+// サーバにイベントを保存し、後から参加したプレイヤーにも届ける。
+RequestEvent(RequestTo.Master, SendTo.Owner, "HogeHoge", Pack(1, 2.0f), "M*&*abc*", 120, JoinSync.Latest);
 ```
 
 ### デバッグ

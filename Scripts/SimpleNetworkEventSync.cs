@@ -10,40 +10,41 @@ namespace tutinoco
     public class SimpleNetworkEventSync : UdonSharpBehaviour
     {
         [SerializeField] protected SimpleNetwork sn;
-        private bool isWaiting;
+        protected bool isWaiting;
+        protected bool isInitialSyncComplete;
 
-        [UdonSynced(UdonSyncMode.None)] private int count;
-        [UdonSynced(UdonSyncMode.None)] private string[] names = new string[0];
-        [UdonSynced(UdonSyncMode.None)] private int[] values = new int[0];
-        [UdonSynced(UdonSyncMode.None)] private int[] lengths = new int[0];
-        [UdonSynced(UdonSyncMode.None)] private int[] sources = new int[0];
-        [UdonSynced(UdonSyncMode.None)] private int[] requests = new int[0];
-        [UdonSynced(UdonSyncMode.None)] private int[] sendtos = new int[0];
-        [UdonSynced(UdonSyncMode.None)] private string[] targets = new string[0];
-        [UdonSynced(UdonSyncMode.None)] private int[] delays = new int[0];
-        [UdonSynced(UdonSyncMode.None)] private int[] joinsyncs = new int[0];
+        [UdonSynced(UdonSyncMode.None)] protected int count;
+        [UdonSynced(UdonSyncMode.None)] protected string[] names = new string[0];
+        [UdonSynced(UdonSyncMode.None)] protected int[] values = new int[0];
+        [UdonSynced(UdonSyncMode.None)] protected int[] lengths = new int[0];
+        [UdonSynced(UdonSyncMode.None)] protected int[] sources = new int[0];
+        [UdonSynced(UdonSyncMode.None)] protected int[] requests = new int[0];
+        [UdonSynced(UdonSyncMode.None)] protected int[] sendtos = new int[0];
+        [UdonSynced(UdonSyncMode.None)] protected string[] targets = new string[0];
+        [UdonSynced(UdonSyncMode.None)] protected int[] delays = new int[0];
+        [UdonSynced(UdonSyncMode.None)] protected int[] joinsyncs = new int[0];
 
-        [UdonSynced(UdonSyncMode.None)] private bool[] bools = new bool[0];
-        [UdonSynced(UdonSyncMode.None)] private char[] chars = new char[0];
-        [UdonSynced(UdonSyncMode.None)] private byte[] bytes = new byte[0];
-        [UdonSynced(UdonSyncMode.None)] private sbyte[] sbytes = new sbyte[0];
-        [UdonSynced(UdonSyncMode.None)] private short[] shorts = new short[0];
-        [UdonSynced(UdonSyncMode.None)] private ushort[] ushorts = new ushort[0];
-        [UdonSynced(UdonSyncMode.None)] private int[] ints = new int[0];
-        [UdonSynced(UdonSyncMode.None)] private uint[] uints = new uint[0];
-        [UdonSynced(UdonSyncMode.None)] private long[] longs = new long[0];
-        [UdonSynced(UdonSyncMode.None)] private ulong[] ulongs = new ulong[0];
-        [UdonSynced(UdonSyncMode.None)] private float[] floats = new float[0];
-        [UdonSynced(UdonSyncMode.None)] private double[] doubles = new double[0];
-        [UdonSynced(UdonSyncMode.None)] private Vector2[] Vector2s = new Vector2[0];
-        [UdonSynced(UdonSyncMode.None)] private Vector3[] Vector3s = new Vector3[0];
-        [UdonSynced(UdonSyncMode.None)] private Vector4[] Vector4s = new Vector4[0];
-        [UdonSynced(UdonSyncMode.None)] private Quaternion[] Quaternions = new Quaternion[0];
-        [UdonSynced(UdonSyncMode.None)] private string[] strings = new string[0];
-        [UdonSynced(UdonSyncMode.None)] private VRCUrl[] VRCUrls = new VRCUrl[0];
-        [UdonSynced(UdonSyncMode.None)] private Color[] Colors = new Color[0];
-        [UdonSynced(UdonSyncMode.None)] private Color32[] Color32s = new Color32[0];
-        [UdonSynced(UdonSyncMode.None)] private int[] Behaviors = new int[0];
+        [UdonSynced(UdonSyncMode.None)] protected bool[] bools = new bool[0];
+        [UdonSynced(UdonSyncMode.None)] protected char[] chars = new char[0];
+        [UdonSynced(UdonSyncMode.None)] protected byte[] bytes = new byte[0];
+        [UdonSynced(UdonSyncMode.None)] protected sbyte[] sbytes = new sbyte[0];
+        [UdonSynced(UdonSyncMode.None)] protected short[] shorts = new short[0];
+        [UdonSynced(UdonSyncMode.None)] protected ushort[] ushorts = new ushort[0];
+        [UdonSynced(UdonSyncMode.None)] protected int[] ints = new int[0];
+        [UdonSynced(UdonSyncMode.None)] protected uint[] uints = new uint[0];
+        [UdonSynced(UdonSyncMode.None)] protected long[] longs = new long[0];
+        [UdonSynced(UdonSyncMode.None)] protected ulong[] ulongs = new ulong[0];
+        [UdonSynced(UdonSyncMode.None)] protected float[] floats = new float[0];
+        [UdonSynced(UdonSyncMode.None)] protected double[] doubles = new double[0];
+        [UdonSynced(UdonSyncMode.None)] protected Vector2[] Vector2s = new Vector2[0];
+        [UdonSynced(UdonSyncMode.None)] protected Vector3[] Vector3s = new Vector3[0];
+        [UdonSynced(UdonSyncMode.None)] protected Vector4[] Vector4s = new Vector4[0];
+        [UdonSynced(UdonSyncMode.None)] protected Quaternion[] Quaternions = new Quaternion[0];
+        [UdonSynced(UdonSyncMode.None)] protected string[] strings = new string[0];
+        [UdonSynced(UdonSyncMode.None)] protected VRCUrl[] VRCUrls = new VRCUrl[0];
+        [UdonSynced(UdonSyncMode.None)] protected Color[] Colors = new Color[0];
+        [UdonSynced(UdonSyncMode.None)] protected Color32[] Color32s = new Color32[0];
+        [UdonSynced(UdonSyncMode.None)] protected int[] Behaviors = new int[0];
 
         private static int AddElement<T>(ref T[] ary, T elm)
         {
@@ -63,6 +64,14 @@ namespace tutinoco
             Array.Copy(array, index + 1, tmp, index, array.Length - index - 1);
             array = tmp;
         }
+        
+        public virtual void Start()
+        {
+            if( !Networking.IsMaster ) return;
+            count++;
+            isInitialSyncComplete = true;
+            RequestSerialization();
+        }
 
         public int EventLength()
         {
@@ -71,17 +80,15 @@ namespace tutinoco
 
         public object[] GetEvent(int idx)
         {
-            object[] evObj = new object[] {
-                sn.GetBehaviour(sources[idx]),
-                requests[idx],
-                sendtos[idx],
-                names[idx],
-                null,
-                targets[idx],
-                delays[idx],
-                joinsyncs[idx],
-                Networking.GetOwner(gameObject).playerId
-            };
+            object[] evObj = new object[(int)EvObj.Length];
+            evObj[(int)EvObj.Source] = sn.GetBehaviour(sources[idx]);
+            evObj[(int)EvObj.RequestTo] = requests[idx];
+            evObj[(int)EvObj.SendTo] = sendtos[idx];
+            evObj[(int)EvObj.Name] = names[idx];
+            evObj[(int)EvObj.Target] = targets[idx];
+            evObj[(int)EvObj.Delay] = delays[idx];
+            evObj[(int)EvObj.JoinSync] = joinsyncs[idx];
+            evObj[(int)EvObj.Sender] = Networking.GetOwner(gameObject).playerId;
 
             int index = 0;
             int length = lengths[idx];
@@ -116,19 +123,21 @@ namespace tutinoco
         public void SyncEvents()
         {
             if( !isWaiting ) return;
+            if( sn.joinSync == this ) Debug.Log("SYNCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC");
             RequestSerialization();
 #if UNITY_EDITOR
             OnPreSerialization();
 #endif
         }
 
-        public void RemoveEvents( string target ) { RemoveEvents(sn.GetBehaviours(target)); }
-        public void RemoveEvents( SimpleNetworkBehaviour behaviour ) { RemoveEvents(new SimpleNetworkBehaviour[]{behaviour}); }
-        public void RemoveEvents( SimpleNetworkBehaviour[] behaviours )
+        public void RemoveEvents( string name, string target ) { RemoveEvents(name, sn.GetBehaviours(target)); }
+        public void RemoveEvents( string name, SimpleNetworkBehaviour behaviour ) { RemoveEvents(name, new SimpleNetworkBehaviour[]{behaviour}); }
+        public void RemoveEvents( string name, SimpleNetworkBehaviour[] behaviours )
         {
             foreach(var behaviour in behaviours) {
                 int id = behaviour._id;
                 for(var i=0; i<sources.Length; i++) {
+                    if( name!=null && name!="" && names[i] != name ) continue;
                     if( id == sources[i] ) {
                         RemoveValues(values[i*2], values[i*2+1]);
                         RemoveElement(ref names, i);
@@ -286,10 +295,15 @@ namespace tutinoco
             }
         }
 
-        public override void OnPreSerialization()
+        public virtual void OnPreSerialization() {}
+
+        public override void OnDeserialization()
         {
-            isWaiting = false;
-            sn.OnProxySynced(this);
+            Debug.Log("JOIN SYNC EVENT SYNCEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD");
+            if( isInitialSyncComplete ) return;
+            Debug.Log("JOIN SYNC EVENT EXECUTEEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
+            isInitialSyncComplete = true;
+            if( sn != null ) sn.OnEventSynced(this);
         }
     }
 }

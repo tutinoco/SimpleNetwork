@@ -15,6 +15,7 @@ namespace tutinoco
         private object[] obj;
         private string err = "SimpleNetworkError: Could not find {0} in received value.";
         public object[] none { get; } = (object[])null;
+        protected VRCPlayerApi me { get { return Networking.LocalPlayer; } }
 
         public void SimpleNetworkInit( string group="" )
         {
@@ -22,7 +23,7 @@ namespace tutinoco
                 _sn = SimpleNetwork.GetInstance();
                 _sn.SetBehaviour(this);
             }
-            if( group != "" ) SetGroupName(group, false);
+            if( group != "" ) SetGroupName(group);
         }
 
         public object[] Pack(params object[] args) { return (object[])args.Clone(); }
@@ -37,22 +38,18 @@ namespace tutinoco
         public void Duplicate( SimpleNetworkBehaviour behaviour, Vector3 position ) { Duplicate(behaviour, position, Quaternion.identity); }
         public void Duplicate( SimpleNetworkBehaviour behaviour, Vector3 position, Quaternion rotation )
         {
-            RequestEvent(RequestTo.Master, "__DUPLICATE__", Pack(behaviour, position, (Quaternion)rotation));
+            RequestEvent(RequestTo.Server, "DUPLICATE", Pack(behaviour, position, (Quaternion)rotation));
         }
 
         public string GetGroupName() { return _group; }
-        public void SetGroupName( string group, bool global=true )
+        public void SetGroupName( string group )
         {
             string charsToRemove = "?*|&";
             foreach (char c in charsToRemove) group = group.Replace(c.ToString(), "");
-            if( global ) RequestEvent(RequestTo.Master, "__SETGROUPNAME__", group);
-            else { 
-                _group = group;
-                if( _sn.IsReady() ) OnChangeGroupName(false);
-            }
+            _group = group;
         }
 
-        private void E(params object[] args)
+        private object[] E(params object[] args)
         {
             SimpleNetworkInit();
             object[] evObj = (object[])args.Clone();
@@ -61,14 +58,26 @@ namespace tutinoco
             evObj[(int)EvObj.RequestTo] = request.GetType()==typeof(VRCPlayerApi) ? ((VRCPlayerApi)request).playerId+(int)RequestTo.Length : (int)request;
 
             var sendto = evObj[(int)EvObj.SendTo];
-            evObj[(int)EvObj.SendTo] = sendto.GetType()==typeof(VRCPlayerApi) ? ((VRCPlayerApi)sendto).playerId+(int)SendTo.Length : (int)sendto;
+            if( sendto.GetType()==typeof(VRCPlayerApi) ) evObj[(int)EvObj.SendTo] = ((VRCPlayerApi)sendto).playerId+(int)SendTo.Length;
+            else {
+                if( (int)sendto == (int)SendTo.Me ) evObj[(int)EvObj.SendTo] = Networking.LocalPlayer.playerId+(int)SendTo.Length;
+                else evObj[(int)EvObj.SendTo] = (int)sendto;
+            }
 
-            _sn.AddEvent(evObj);
+            return evObj;
         }
 
-        private int F( object[] values, Type type, int idx )
+        private object[] R(object[] evObj)
         {
-            for(int i=idx; i<values.Length; i++) if( values[i].GetType() == type ) return i;
+            _sn.AddEvent(evObj);
+            return evObj;
+        }
+
+        private int I( Type type, int start, object[] values ) { return IndexOf(type, start, values); }
+        public int IndexOf( Type type, int start=0, object[] values=null )
+        {
+            if( values == null ) values = GetValues();
+            for(int i=start; i<values.Length; i++) if( values[i].GetType() == type ) return i;
             return -1;
         }
 
@@ -131,10 +140,28 @@ namespace tutinoco
         public virtual void ReceiveEvent(string name, Color32 value) { }
         public virtual void ReceiveEvent(string name, object[] value) { }
 
-        // JoinSync
-        public void ClaerJoinSync( string target ) { _sn.ClearJoinSync(target); }
-        public void ClaerJoinSync( SimpleNetworkBehaviour behaviour ) { _sn.ClearJoinSync(behaviour); }
-        public void ClaerJoinSync() { _sn.ClearJoinSync(this); }
+        public void SetJoinEvent( object[] evObj )
+        {
+            string name = (string)evObj[(int)EvObj.Name];
+            string target = (string)evObj[(int)EvObj.Target];
+            ClearJoinEvent(name, target);
+
+            evObj = (object[])evObj.Clone();
+            evObj[(int)EvObj.RequestTo] = RequestTo.Server;
+            RequestEvent(evObj);
+        }
+
+        public void LoggedJoinEvent( object[] evObj )
+        {
+            evObj = (object[])evObj.Clone();
+            evObj[(int)EvObj.RequestTo] = RequestTo.Server;
+            RequestEvent(evObj);
+        }
+
+        public void ClearJoinEvent( string name="", string target="" )
+        {
+            RequestEvent(RequestTo.Server, "CLEAR_JOINEVENT", Pack(name, target));
+        }
 
         // Meta
         public int GetDelay() { return (int)obj[(int)EvObj.Delay]; }
@@ -142,7 +169,8 @@ namespace tutinoco
         public int GetIndex() { return _groupIndex; }
         public int GetSender() { return (int)obj[(int)EvObj.Sender]; }
         public string GetTarget() { return (string)obj[(int)EvObj.Target]; }
-        public int[] GetRecipients() {
+        public int[] GetRecipients()
+        {
             int sendto = (int)obj[(int)EvObj.SendTo];
             if( sendto < (int)SendTo.Length ) {
                 if( sendto == (int)SendTo.All ) return _sn.GetPlayers();
@@ -168,488 +196,788 @@ namespace tutinoco
             return arr;
         }
 
+        // EvObj
+        public object[] ExecEvent(object[] evObj) { if(evObj==null) return null; evObj=(object[])evObj.Clone(); evObj[(int)EvObj.RequestTo]=RequestTo.None; evObj[(int)EvObj.SendTo]=SendTo.Self; return R(evObj); }
+        public object[] SendEvent(object[] evObj) { if(evObj==null) return null; evObj=(object[])evObj.Clone(); evObj[(int)EvObj.RequestTo]=RequestTo.None; return R(evObj); }
+        public object[] RequestEvent(object[] evObj) { if(evObj==null) return null; evObj=(object[])evObj.Clone(); return R(evObj); }
+        public object[] RequestEvent(RequestTo request, object[] evObj) { if(evObj==null) return null; evObj=(object[])evObj.Clone(); evObj[(int)EvObj.RequestTo]=request; return R(evObj); }
+
         // void
-        public void ExecEvent(string name) { E(this, RequestTo.None, SendTo.Self, name, null, "", 0, JoinSync.None); }
-        public void SendEvent(string name) { E(this, RequestTo.None, SendTo.All, name, null, "", 0, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name) { E(this, RequestTo.None, sendto, name, null, "", 0, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name) { E(this, RequestTo.None, sendto, name, null, "", 0, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name) { E(this, request, SendTo.All, name, null, "", 0, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name) { E(this, request, SendTo.All, name, null, "", 0, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name) { E(this, request, sendto, name, null, "", 0, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name) { E(this, request, sendto, name, null, "", 0, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name) { E(this, request, sendto, name, null, "", 0, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name) { E(this, request, sendto, name, null, "", 0, JoinSync.None); }
+        public object[] ExecEvent(string name) { return R(E(this, RequestTo.None, SendTo.Self, name, null, "", 0, JoinSync.None)); }
+        public object[] SendEvent(string name) { return R(E(this, RequestTo.None, SendTo.All, name, null, "", 0, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name) { return R(E(this, RequestTo.None, sendto, name, null, "", 0, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name) { return R(E(this, RequestTo.None, sendto, name, null, "", 0, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name) { return R(E(this, request, SendTo.All, name, null, "", 0, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name) { return R(E(this, request, SendTo.All, name, null, "", 0, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name) { return R(E(this, request, sendto, name, null, "", 0, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name) { return R(E(this, request, sendto, name, null, "", 0, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name) { return R(E(this, request, sendto, name, null, "", 0, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name) { return R(E(this, request, sendto, name, null, "", 0, JoinSync.None)); }
+        public object[] CreateEvent(RequestTo request, string name) { return E(this, request, SendTo.All, name, null, "", 0, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name) { return E(this, request, SendTo.All, name, null, "", 0, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name) { return E(this, request, sendto, name, null, "", 0, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name) { return E(this, request, sendto, name, null, "", 0, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name) { return E(this, request, sendto, name, null, "", 0, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name) { return E(this, request, sendto, name, null, "", 0, JoinSync.None); }
 
         // bool
-        public void ExecEvent(string name, bool value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None); }
-        public void ExecEvent(string name, bool value, int delay) { E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, bool value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(string name, bool value, int delay) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, bool value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync); }
-        public void SendEvent(string name, bool value, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync); }
-        public void SendEvent(string name, bool value, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync); }
-        public void SendEvent(string name, bool value, string target, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, bool value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, bool value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, bool value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, bool value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, bool value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, bool value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, bool value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, bool value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, bool value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, bool value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, bool value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, bool value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, bool value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, bool value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, bool value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, bool value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, bool value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, bool value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, bool value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, bool value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, bool value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, bool value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, bool value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, bool value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, bool value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, bool value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, bool value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, bool value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, bool value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, bool value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public bool GetBool(int i=0) { object[] v=GetValues(); i=F(v,typeof(bool),i); if(i==-1)Debug.LogError(string.Format(err,"bool")); return (bool)v[i]; }
+        public object[] ExecEvent(string name, bool value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None)); }
+        public object[] ExecEvent(string name, bool value, int delay) { return R(E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, bool value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(string name, bool value, int delay) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, bool value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(string name, bool value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(string name, bool value, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(string name, bool value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, bool value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, bool value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, bool value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, bool value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, bool value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, bool value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, bool value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, bool value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, bool value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, bool value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, bool value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, bool value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, bool value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, bool value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, bool value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, bool value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, bool value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, bool value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, bool value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, bool value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, bool value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, bool value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, bool value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, bool value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, bool value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, bool value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, bool value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, bool value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, bool value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, bool value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] CreateEvent(RequestTo request, string name, bool value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, bool value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, bool value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, bool value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, bool value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, bool value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, bool value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, bool value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, bool value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, bool value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, bool value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, bool value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, bool value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, bool value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, bool value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, bool value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, bool value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, bool value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, bool value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, bool value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, bool value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public bool GetBool(int i=0) { object[] v=GetValues(); i=I(typeof(bool),i,v); if(i==-1)Debug.LogError(string.Format(err,"bool")); return (bool)v[i]; }
 
         // int
-        public void ExecEvent(string name, int value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None); }
-        public void ExecEvent(string name, int value, int delay) { E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, int value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(string name, int value, int delay) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, int value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync); }
-        public void SendEvent(string name, int value, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync); }
-        public void SendEvent(string name, int value, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync); }
-        public void SendEvent(string name, int value, string target, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, int value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, int value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, int value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, int value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, int value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, int value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, int value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, int value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, int value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, int value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, int value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, int value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, int value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, int value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, int value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, int value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, int value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, int value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, int value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, int value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, int value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, int value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, int value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, int value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, int value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, int value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, int value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, int value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, int value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, int value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public int GetInt(int i=0) { object[] v=GetValues(); i=F(v,typeof(int),i); if(i==-1)Debug.LogError(string.Format(err,"int")); return (int)v[i]; }
+        public object[] ExecEvent(string name, int value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None)); }
+        public object[] ExecEvent(string name, int value, int delay) { return R(E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, int value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(string name, int value, int delay) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, int value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(string name, int value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(string name, int value, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(string name, int value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, int value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, int value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, int value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, int value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, int value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, int value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, int value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, int value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, int value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, int value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, int value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, int value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, int value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, int value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, int value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, int value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, int value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, int value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, int value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, int value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, int value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, int value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, int value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, int value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, int value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, int value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, int value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, int value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, int value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, int value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, int value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] CreateEvent(RequestTo request, string name, int value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, int value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, int value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, int value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, int value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, int value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, int value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, int value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, int value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, int value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, int value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, int value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, int value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, int value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, int value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, int value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, int value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, int value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, int value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, int value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, int value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, int value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, int value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, int value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, int value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, int value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public int GetInt(int i=0) { object[] v=GetValues(); i=I(typeof(int),i,v); if(i==-1)Debug.LogError(string.Format(err,"int")); return (int)v[i]; }
 
         // float
-        public void ExecEvent(string name, float value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None); }
-        public void ExecEvent(string name, float value, int delay) { E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, float value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(string name, float value, int delay) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, float value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync); }
-        public void SendEvent(string name, float value, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync); }
-        public void SendEvent(string name, float value, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync); }
-        public void SendEvent(string name, float value, string target, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, float value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, float value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, float value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, float value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, float value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, float value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, float value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, float value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, float value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, float value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, float value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, float value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, float value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, float value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, float value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, float value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, float value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, float value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, float value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, float value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, float value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, float value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, float value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, float value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, float value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, float value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, float value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, float value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, float value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, float value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public float GetFloat(int i=0) { object[] v=GetValues(); i=F(v,typeof(float),i); if(i==-1)Debug.LogError(string.Format(err,"float")); return (float)v[i]; }
+        public object[] ExecEvent(string name, float value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None)); }
+        public object[] ExecEvent(string name, float value, int delay) { return R(E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, float value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(string name, float value, int delay) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, float value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(string name, float value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(string name, float value, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(string name, float value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, float value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, float value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, float value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, float value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, float value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, float value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, float value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, float value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, float value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, float value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, float value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, float value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, float value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, float value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, float value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, float value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, float value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, float value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, float value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, float value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, float value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, float value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, float value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, float value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, float value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, float value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, float value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, float value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, float value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, float value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, float value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] CreateEvent(RequestTo request, string name, float value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, float value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, float value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, float value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, float value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, float value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, float value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, float value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, float value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, float value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, float value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, float value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, float value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, float value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, float value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, float value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, float value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, float value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, float value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, float value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, float value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, float value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, float value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, float value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, float value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, float value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public float GetFloat(int i=0) { object[] v=GetValues(); i=I(typeof(float),i,v); if(i==-1)Debug.LogError(string.Format(err,"float")); return (float)v[i]; }
 
         // string
-        public void ExecEvent(string name, string value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None); }
-        public void ExecEvent(string name, string value, int delay) { E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, string value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(string name, string value, int delay) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, string value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync); }
-        public void SendEvent(string name, string value, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync); }
-        public void SendEvent(string name, string value, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync); }
-        public void SendEvent(string name, string value, string target, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, string value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, string value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, string value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, string value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, string value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, string value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, string value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, string value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, string value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, string value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, string value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, string value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, string value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, string value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, string value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, string value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, string value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, string value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, string value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, string value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, string value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, string value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, string value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, string value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, string value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, string value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, string value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, string value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, string value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, string value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public string GetString(int i=0) { object[] v=GetValues(); i=F(v,typeof(string),i); if(i==-1)Debug.LogError(string.Format(err,"string")); return (string)v[i]; }
+        public object[] ExecEvent(string name, string value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None)); }
+        public object[] ExecEvent(string name, string value, int delay) { return R(E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, string value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(string name, string value, int delay) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, string value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(string name, string value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(string name, string value, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(string name, string value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, string value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, string value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, string value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, string value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, string value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, string value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, string value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, string value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, string value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, string value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, string value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, string value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, string value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, string value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, string value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, string value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, string value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, string value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, string value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, string value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, string value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, string value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, string value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, string value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, string value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, string value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, string value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, string value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, string value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, string value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, string value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] CreateEvent(RequestTo request, string name, string value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, string value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, string value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, string value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, string value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, string value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, string value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, string value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, string value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, string value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, string value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, string value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, string value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, string value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, string value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, string value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, string value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, string value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, string value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, string value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, string value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, string value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, string value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, string value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, string value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, string value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public string GetString(int i=0) { object[] v=GetValues(); i=I(typeof(string),i,v); if(i==-1)Debug.LogError(string.Format(err,"string")); return (string)v[i]; }
 
         // Vector3
-        public void ExecEvent(string name, Vector3 value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None); }
-        public void ExecEvent(string name, Vector3 value, int delay) { E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, Vector3 value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(string name, Vector3 value, int delay) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, Vector3 value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync); }
-        public void SendEvent(string name, Vector3 value, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync); }
-        public void SendEvent(string name, Vector3 value, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync); }
-        public void SendEvent(string name, Vector3 value, string target, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, Vector3 value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, Vector3 value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, Vector3 value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, Vector3 value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, Vector3 value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Vector3 value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Vector3 value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Vector3 value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Vector3 value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Vector3 value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, Vector3 value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, Vector3 value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, Vector3 value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, Vector3 value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, Vector3 value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, Vector3 value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, Vector3 value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, Vector3 value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, Vector3 value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, Vector3 value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, Vector3 value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, Vector3 value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public Vector3 GetVector3(int i=0) { object[] v=GetValues(); i=F(v,typeof(Vector3),i); if(i==-1)Debug.LogError(string.Format(err,"Vector3")); return (Vector3)v[i]; }
+        public object[] ExecEvent(string name, Vector3 value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None)); }
+        public object[] ExecEvent(string name, Vector3 value, int delay) { return R(E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, Vector3 value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(string name, Vector3 value, int delay) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, Vector3 value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(string name, Vector3 value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(string name, Vector3 value, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(string name, Vector3 value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, Vector3 value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, Vector3 value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, Vector3 value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, Vector3 value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, Vector3 value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Vector3 value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Vector3 value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Vector3 value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Vector3 value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Vector3 value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, Vector3 value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, Vector3 value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, Vector3 value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, Vector3 value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, Vector3 value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Vector3 value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Vector3 value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Vector3 value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Vector3 value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Vector3 value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Vector3 value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] CreateEvent(RequestTo request, string name, Vector3 value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, Vector3 value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, Vector3 value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, Vector3 value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, Vector3 value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Vector3 value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Vector3 value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Vector3 value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Vector3 value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Vector3 value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Vector3 value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Vector3 value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Vector3 value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Vector3 value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Vector3 value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Vector3 value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Vector3 value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Vector3 value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public Vector3 GetVector3(int i=0) { object[] v=GetValues(); i=I(typeof(Vector3),i,v); if(i==-1)Debug.LogError(string.Format(err,"Vector3")); return (Vector3)v[i]; }
 
         // Quaternion
-        public void ExecEvent(string name, Quaternion value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None); }
-        public void ExecEvent(string name, Quaternion value, int delay) { E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, Quaternion value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(string name, Quaternion value, int delay) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, Quaternion value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync); }
-        public void SendEvent(string name, Quaternion value, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync); }
-        public void SendEvent(string name, Quaternion value, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync); }
-        public void SendEvent(string name, Quaternion value, string target, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, Quaternion value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, Quaternion value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, Quaternion value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, Quaternion value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, Quaternion value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Quaternion value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Quaternion value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Quaternion value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Quaternion value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, Quaternion value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, Quaternion value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, Quaternion value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, Quaternion value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, Quaternion value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, Quaternion value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, Quaternion value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, Quaternion value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, Quaternion value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, Quaternion value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, Quaternion value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, Quaternion value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, Quaternion value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public Quaternion GetQuaternion(int i=0) { object[] v=GetValues(); i=F(v,typeof(Quaternion),i); if(i==-1)Debug.LogError(string.Format(err,"Quaternion")); return (Quaternion)v[i]; }
+        public object[] ExecEvent(string name, Quaternion value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None)); }
+        public object[] ExecEvent(string name, Quaternion value, int delay) { return R(E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, Quaternion value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(string name, Quaternion value, int delay) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, Quaternion value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(string name, Quaternion value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(string name, Quaternion value, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(string name, Quaternion value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, Quaternion value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, Quaternion value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, Quaternion value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, Quaternion value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, Quaternion value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Quaternion value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Quaternion value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Quaternion value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Quaternion value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, Quaternion value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, Quaternion value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, Quaternion value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, Quaternion value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, Quaternion value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, Quaternion value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, Quaternion value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Quaternion value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Quaternion value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Quaternion value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Quaternion value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, Quaternion value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] CreateEvent(RequestTo request, string name, Quaternion value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, Quaternion value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, Quaternion value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, Quaternion value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, Quaternion value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Quaternion value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Quaternion value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Quaternion value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Quaternion value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, Quaternion value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, Quaternion value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Quaternion value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Quaternion value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Quaternion value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Quaternion value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, Quaternion value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, Quaternion value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, Quaternion value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public Quaternion GetQuaternion(int i=0) { object[] v=GetValues(); i=I(typeof(Quaternion),i,v); if(i==-1)Debug.LogError(string.Format(err,"Quaternion")); return (Quaternion)v[i]; }
 
         // Behaviour
-        public void ExecEvent(string name, SimpleNetworkBehaviour value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None); }
-        public void ExecEvent(string name, SimpleNetworkBehaviour value, int delay) { E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, SimpleNetworkBehaviour value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(string name, SimpleNetworkBehaviour value, int delay) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync); }
-        public void SendEvent(string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync); }
-        public void SendEvent(string name, SimpleNetworkBehaviour value, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync); }
-        public void SendEvent(string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public SimpleNetworkBehaviour GetBehaviour(int i=0) { object[] v=GetValues(); i=F(v,typeof(UdonSharpBehaviour),i); if(i==-1)Debug.LogError(string.Format(err,"SimpleNetworkBehaviour")); return (SimpleNetworkBehaviour)v[i]; }
+        public object[] ExecEvent(string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None)); }
+        public object[] ExecEvent(string name, SimpleNetworkBehaviour value, int delay) { return R(E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(string name, SimpleNetworkBehaviour value, int delay) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] CreateEvent(RequestTo request, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, SimpleNetworkBehaviour value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, SimpleNetworkBehaviour value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public SimpleNetworkBehaviour GetBehaviour(int i=0) { object[] v=GetValues(); i=I(typeof(UdonSharpBehaviour),i,v); if(i==-1)Debug.LogError(string.Format(err,"SimpleNetworkBehaviour")); return (SimpleNetworkBehaviour)v[i]; }
 
         // object[]
-        public void ExecEvent(string name, object[] value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None); }
-        public void ExecEvent(string name, object[] value, int delay) { E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, object[] value, string target="", int delay=0) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(string name, object[] value, int delay) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(string name, object[] value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync); }
-        public void SendEvent(string name, object[] value, int delay, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync); }
-        public void SendEvent(string name, object[] value, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync); }
-        public void SendEvent(string name, object[] value, string target, JoinSync joinsync) { E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, object[] value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, object[] value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(SendTo sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, object[] value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(SendTo sendto, string name, object[] value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(SendTo sendto, string name, object[] value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, object[] value, string target="", int delay=0) { E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, object[] value, int delay) { E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None); }
-        public void SendEvent(VRCPlayerApi sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, object[] value, int delay, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", delay, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, object[] value, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, "", 0, joinsync); }
-        public void SendEvent(VRCPlayerApi sendto, string name, object[] value, string target, JoinSync joinsync) { E(this, RequestTo.None, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, object[] value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, object[] value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, string name, object[] value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, object[] value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, string name, object[] value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, string name, object[] value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, object[] value, string target="", int delay=0) { E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, object[] value, int delay) { E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, string name, object[] value, string target, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, object[] value, int delay, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, object[] value, JoinSync joinsync) { E(this, request, SendTo.All, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, string name, object[] value, string target, JoinSync joinsync) { E(this, request, SendTo.All, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, string target="", int delay=0) { E(this, request, sendto, name, value, target, delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, int delay) { E(this, request, sendto, name, value, "", delay, JoinSync.None); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, target, delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, int delay, JoinSync joinsync) { E(this, request, sendto, name, value, "", delay, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, JoinSync joinsync) { E(this, request, sendto, name, value, "", 0, joinsync); }
-        public void RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, string target, JoinSync joinsync) { E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] ExecEvent(string name, object[] value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.Self, name, value, target, delay, JoinSync.None)); }
+        public object[] ExecEvent(string name, object[] value, int delay) { return R(E(this, RequestTo.None, SendTo.Self, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, object[] value, string target="", int delay=0) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(string name, object[] value, int delay) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(string name, object[] value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(string name, object[] value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(string name, object[] value, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(string name, object[] value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, object[] value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, object[] value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(SendTo sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, object[] value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, object[] value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(SendTo sendto, string name, object[] value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, object[] value, string target="", int delay=0) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, object[] value, int delay) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, object[] value, int delay, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", delay, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, object[] value, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, "", 0, joinsync)); }
+        public object[] SendEvent(VRCPlayerApi sendto, string name, object[] value, string target, JoinSync joinsync) { return R(E(this, RequestTo.None, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, object[] value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, object[] value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, string name, object[] value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, object[] value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, object[] value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, string name, object[] value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, SendTo sendto, string name, object[] value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, object[] value, string target="", int delay=0) { return R(E(this, request, SendTo.All, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, object[] value, int delay) { return R(E(this, request, SendTo.All, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, object[] value, string target, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, object[] value, int delay, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, object[] value, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, string name, object[] value, string target, JoinSync joinsync) { return R(E(this, request, SendTo.All, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, string target="", int delay=0) { return R(E(this, request, sendto, name, value, target, delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, int delay) { return R(E(this, request, sendto, name, value, "", delay, JoinSync.None)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, int delay, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", delay, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, JoinSync joinsync) { return R(E(this, request, sendto, name, value, "", 0, joinsync)); }
+        public object[] RequestEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, string target, JoinSync joinsync) { return R(E(this, request, sendto, name, value, target, 0, joinsync)); }
+        public object[] CreateEvent(RequestTo request, string name, object[] value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, object[] value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, string name, object[] value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, object[] value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, object[] value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, string name, object[] value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, object[] value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, object[] value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, object[] value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, object[] value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, SendTo sendto, string name, object[] value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(RequestTo request, VRCPlayerApi sendto, string name, object[] value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, object[] value, string target="", int delay=0) { return E(this, request, SendTo.All, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, object[] value, int delay) { return E(this, request, SendTo.All, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, object[] value, string target, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, object[] value, int delay, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, object[] value, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, string name, object[] value, string target, JoinSync joinsync) { return E(this, request, SendTo.All, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, SendTo sendto, string name, object[] value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, string target="", int delay=0) { return E(this, request, sendto, name, value, target, delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, int delay) { return E(this, request, sendto, name, value, "", delay, JoinSync.None); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, string target, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, target, delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, int delay, JoinSync joinsync) { return E(this, request, sendto, name, value, "", delay, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, JoinSync joinsync) { return E(this, request, sendto, name, value, "", 0, joinsync); }
+        public object[] CreateEvent(VRCPlayerApi request, VRCPlayerApi sendto, string name, object[] value, string target, JoinSync joinsync) { return E(this, request, sendto, name, value, target, 0, joinsync); }
         public object[] GetValues() { var v=obj[(int)EvObj.Value]; return v==null?new object[0]:(v.GetType()==typeof(object[])?(object[])v:new object[]{v}); }
     }
 }

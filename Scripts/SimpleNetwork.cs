@@ -1,4 +1,4 @@
-﻿using UdonSharp;
+using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
 using VRC.Udon;
@@ -23,6 +23,7 @@ namespace tutinoco
         None,
         Owner,
         Master,
+        Server,
         Length,
     }
 
@@ -37,6 +38,7 @@ namespace tutinoco
         Delay,
         JoinSync,
         Sender,
+        Length,
     }
 
     public enum JoinSync
@@ -44,6 +46,15 @@ namespace tutinoco
         None,
         Latest,
         Logging,
+    }
+
+    public enum Timing
+    {
+        Update,
+        FixedUpdate,
+        LateUpdate,
+        PostLateUpdate,
+        Joined,
     }
 
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
@@ -54,7 +65,7 @@ namespace tutinoco
         private object[][] evObjs = new object[0][];
         private SimpleNetworkBehaviour[] behaviours = new SimpleNetworkBehaviour[0];
         [SerializeField] private SimpleNetworkProxy[] proxys;
-        [SerializeField] private SimpleNetworkEventSync joinSync;
+        [SerializeField] public SimpleNetworkEventSync joinSync;
         private SimpleNetworkProxy myProxy;
         private int[] refer = new int[0];
 
@@ -91,12 +102,12 @@ namespace tutinoco
                 double delay = (double)evObj[(int)EvObj.Delay];
                 int counter = (int)((delay-(int)delay) * 1000000);
                 if( (int)delay == counter ){
-                    if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(object[])){foreach(var w in(object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("SendEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],((string)evObj[(int)EvObj.Target]=="")?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
+                    if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(object[])){foreach(var w in(object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("SimpleNetwork SendEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],((string)evObj[(int)EvObj.Target]=="")?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
                     RemoveEvent(evObj);
                     if( (int)evObj[(int)EvObj.SendTo]==(int)SendTo.Self ||
                         (int)evObj[(int)EvObj.SendTo]==Networking.LocalPlayer.playerId+(int)SendTo.Length ) ReceiveEvent(evObj, (string)evObj[(int)EvObj.Target]);
                     else myProxy.SetEvent(evObj);
-                }
+                } else { evObj[(int)EvObj.Delay] = delay+0.000001; }
             }
 
             myProxy.SyncEvents();
@@ -122,8 +133,9 @@ namespace tutinoco
 
         public SimpleNetworkBehaviour GetBehaviour( int id )
         {
+            if( id >= behaviours.Length ) Debug.Log("SimpleNetwork Error: Attempted to get SimpleNetworkBehaviour number "+id+" that is not unmanaged.");
             return behaviours[id];
-        }
+        }           
 
         public int SetBehaviour(SimpleNetworkBehaviour behaviour)
         {
@@ -194,7 +206,7 @@ namespace tutinoco
             refer = temp;
             refer[pid-1] = proxy.GetNum();
 
-            if( isDebugMode ) Debug.Log("SimpleNetwork Assigned Proxy #"+proxy.GetNum()+" to "+player.displayName);
+            if( isDebugMode ) Debug.Log("SimpleNetwork Assigned Proxy #"+proxy.GetNum()+" to "+player.displayName+" (playerId: "+player.playerId+")");
         }
 
         private void DetachProxy( VRCPlayerApi player )
@@ -203,20 +215,46 @@ namespace tutinoco
             if( isDebugMode ) Debug.Log("SimpleNetwork Removed Proxy #"+refer[i]);
             refer[i] = 0;
         }
-
-        public void ClearJoinSync( SimpleNetworkBehaviour behaviour ){ joinSync.RemoveEvents(behaviour); }
-        public void ClearJoinSync( string target ){ joinSync.RemoveEvents(target); }
-
-        public void OnProxySynced( SimpleNetworkEventSync proxy )
+/*
+        public void SetJoinEvent( object[] evObj )
         {
-            HandleAllEvents(proxy);
+            evObj = (object[])evObj.Clone();
+            evObj[(int)EvObj.SendTo] = SendTo.All;
+
+            string name = (string)evObj[(int)EvObj.Name];
+            string target = (string)evObj[(int)EvObj.Target];
+            if( target != "" ) ClearJoinEvent(name, target);
+            else ClearJoinEvent(name, (SimpleNetworkBehaviour)evObj[(int)EvObj.Source]);
+
+            Debug.Log("SetJoinEvent: "+name+" Length:"+joinSync.EventLength());
+            joinSync.SetEvent(evObj);
+            joinSync.SyncEvents();
+            Debug.Log("SetJoinEvent: "+name+" Length:"+joinSync.EventLength());
         }
 
-        private void HandleAllEvents( SimpleNetworkEventSync events=null )
+        public void LoggedJoinEvent( object[] evObj )
         {
-            bool isNull = events == null;
-            if( isNull ) events = joinSync;
+            evObj = (object[])evObj.Clone();
+            evObj[(int)EvObj.SendTo] = SendTo.All;
 
+            string name = (string)evObj[(int)EvObj.Name];
+            joinSync.SetEvent(evObj);
+            joinSync.SyncEvents();
+            Debug.Log("LoggedJoinEvent: "+name+" Length:"+joinSync.EventLength());
+        }
+
+        public void ClearJoinEvent( string name, SimpleNetworkBehaviour behaviour ){ joinSync.RemoveEvents(name, behaviour); }
+        public void ClearJoinEvent( string name, string target ){ joinSync.RemoveEvents(name, target); }
+        */
+
+        public void OnEventSynced( SimpleNetworkEventSync eventSync )
+        {
+            Debug.Log("OnEventSynced EventLength: "+eventSync.EventLength());
+            HandleAllEvents(eventSync);
+        }
+
+        private void HandleAllEvents( SimpleNetworkEventSync events )
+        {
             for(int i=0; i<events.EventLength(); i++) {
                 object[] evObj = events.GetEvent(i);
                 string name = (string)evObj[(int)EvObj.Name];
@@ -225,24 +263,18 @@ namespace tutinoco
                 int sendto = (int)evObj[(int)EvObj.SendTo];
                 int sender = (int)evObj[(int)EvObj.Sender];
                 string target = (string)evObj[(int)EvObj.Target];
-                JoinSync joinsync = (JoinSync)evObj[(int)EvObj.JoinSync];
 
-                if( request == (int)RequestTo.Master && Networking.IsMaster
+                if( request == (int)RequestTo.Server ) {
+                    if( Networking.IsMaster ) ReceiveServerEvent(evObj);
+                    continue;
+                } else if( request == (int)RequestTo.Master && Networking.IsMaster
                  || request == (int)RequestTo.Owner && Networking.IsOwner(source.gameObject)
                  || request == Networking.LocalPlayer.playerId+(int)RequestTo.Length ) {
-                    evObj[(int)EvObj.RequestTo]=(int)RequestTo.None;
+                    Debug.Log("REQUEST RECEIVED!!!!!!!!!!!: "+request+" -> "+sendto);
+                    if( request > (int)RequestTo.Length )
+                    evObj[(int)EvObj.RequestTo] = (int)RequestTo.None;
                     AddEvent(evObj);
-                }
-
-                if( request != (int)RequestTo.None ) continue;
-
-                if( isNull ) {
-                    if( joinsync==JoinSync.Logging ) joinSync.SetEvent(evObj);
-                    if( joinsync==JoinSync.Latest ) {
-                        if( target != "" ) ClearJoinSync(target);
-                        else ClearJoinSync(source);
-                        joinSync.SetEvent(evObj);
-                    }
+                    continue;
                 }
 
                 bool isReceive = false;
@@ -256,27 +288,44 @@ namespace tutinoco
                 else if( Networking.LocalPlayer.playerId == sendto+(int)SendTo.Length ) isReceive = true;
                 if( !isReceive ) continue;
 
-                if( name == "__DUPLICATE__" ) {
-                    object[] v = (object[])evObj[(int)EvObj.Value];
-                    var b = Instantiate(((SimpleNetworkBehaviour)v[0]).gameObject, (Vector3)v[1], (Quaternion)v[2]).GetComponent<SimpleNetworkBehaviour>();
-                    SetBehaviour(b);
-                    source.OnDuplicateComplete(b);
-                    continue;
-                }
-
-                if( name == "__SETGROUPNAME__" ) {
-                    source._group = (string)evObj[(int)EvObj.Value];
-                    source.OnChangeGroupName(true);
-                    continue;
-                }
-
                 ReceiveEvent( evObj, (string)evObj[(int)EvObj.Target] );
+            }
+        }
+
+        public void ReceiveServerEvent( object[] evObj )
+        {
+            string name = (string)evObj[(int)EvObj.Name];
+
+            if( name == "DUPLICATE" ) {
+                var source = (SimpleNetworkBehaviour)evObj[(int)EvObj.Source];
+                object[] v = (object[])evObj[(int)EvObj.Value];
+                var b = Instantiate(((SimpleNetworkBehaviour)v[0]).gameObject, (Vector3)v[1], (Quaternion)v[2]).GetComponent<SimpleNetworkBehaviour>();
+                SetBehaviour(b);
+                source.OnDuplicateComplete(b);
+            }
+
+            else if( name == "CLEAR_JOINEVENT" ) {
+                Debug.Log("CLEAR_JOINEVENT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+/*                object[] val = (object[])evObj[(int)EvObj.Value];
+                string target = (string)val[1];
+                if( target != "" ) joinSync.RemoveEvents((string)val[0], target);
+                else joinSync.RemoveEvents((string)val[0], (SimpleNetworkBehaviour)evObj[(int)EvObj.Source]);
+                joinSync.SyncEvents();
+*/            }
+
+            else {
+                evObj = (object[])evObj.Clone();
+                evObj[(int)EvObj.RequestTo] = RequestTo.None;
+                evObj[(int)EvObj.SendTo] = SendTo.All;
+                joinSync.SetEvent(evObj);
+                Debug.Log("SET JOIN EVENT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! "+joinSync.EventLength());
+                joinSync.SyncEvents();
             }
         }
 
         public void ReceiveEvent( object[] evObj, string target )
         {
-            if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(object[])){foreach(var w in(object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("ReceiveEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],evObj[(int)EvObj.Target]==""?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
+            if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(object[])){foreach(var w in(object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("SimpleNetwork ReceiveEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],evObj[(int)EvObj.Target]==""?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
             if( target == "" ) {
                 var b = (SimpleNetworkBehaviour)evObj[(int)EvObj.Source];
                 b._groupIndex = 0;
@@ -323,14 +372,22 @@ namespace tutinoco
         {
             VRCPlayerApi player = Networking.GetOwner(proxy.gameObject);
             AttachProxy(player, proxy);
-            if( Networking.LocalPlayer == player ) myProxy = proxy;
-            foreach( var b in behaviours ) b.OnSimpleNetworkReady();
+
+            if( Networking.LocalPlayer != player ) return;            
+            myProxy = proxy;
+
+            if( isDebugMode ) Debug.Log("SimpleNetwork BehavioursList ================================");
+            for(int i=0; i<behaviours.Length; i++) { behaviours[i].OnSimpleNetworkReady(); if( isDebugMode ) Debug.Log(i+": "+ behaviours[i]._group); }
+            if( isDebugMode ) Debug.Log("========================================== BehavioursList End");
+        }
+
+        public void Test()
+        {
+            HandleAllEvents(joinSync);
         }
 
         public override void OnPlayerJoined(VRCPlayerApi player)
         {
-            if( Networking.LocalPlayer == player ) HandleAllEvents();
-
             if( !Networking.IsMaster ) return;
 
             for(var i=0; i<proxys.Length; i++) {

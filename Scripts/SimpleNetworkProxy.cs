@@ -11,9 +11,10 @@ namespace tutinoco
     {
         private int num;
 
-        void Start()
+        public override void Start()
         {
             num = gameObject.transform.GetSiblingIndex();
+            base.Start();
         }
 
         public int GetNum()
@@ -21,9 +22,16 @@ namespace tutinoco
             return num;
         }
 
+        public override void OnPreSerialization()
+        {
+            isWaiting = false;
+            sn.OnEventSynced(this);
+        }
+
         public override void OnDeserialization()
         {
-            sn.OnProxySynced(this);
+            if( !isInitialSyncComplete ) { isInitialSyncComplete=true; return; }            
+            if( sn != null ) sn.OnEventSynced(this);
         }
 
         public override void OnOwnershipTransferred(VRCPlayerApi player)
