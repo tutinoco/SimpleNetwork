@@ -6,10 +6,17 @@ using VRC.Udon;
 
 namespace tutinoco
 {
+    public enum EventSyncType
+    {
+        Proxy,
+        JoynSync,
+    }
+
     [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class SimpleNetworkEventSync : UdonSharpBehaviour
     {
         [SerializeField] protected SimpleNetwork sn;
+        [SerializeField] protected EventSyncType eventSyncType;
         protected bool isWaiting;
         protected bool isInitialSyncComplete;
 
@@ -123,7 +130,6 @@ namespace tutinoco
         public void SyncEvents()
         {
             if( !isWaiting ) return;
-            if( sn.joinSync == this ) Debug.Log("SYNCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC");
             RequestSerialization();
 #if UNITY_EDITOR
             OnPreSerialization();
@@ -295,15 +301,27 @@ namespace tutinoco
             }
         }
 
-        public virtual void OnPreSerialization() {}
+        public override void OnPreSerialization()
+        {
+            if( eventSyncType != EventSyncType.Proxy ) return;
+            isWaiting = false;
+            sn.OnEventSynced(this);
+        }
 
         public override void OnDeserialization()
         {
-            Debug.Log("JOIN SYNC EVENT SYNCEDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD");
-            if( isInitialSyncComplete ) return;
-            Debug.Log("JOIN SYNC EVENT EXECUTEEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
+            bool sync = true;
+            if( eventSyncType == EventSyncType.Proxy && !isInitialSyncComplete ) sync = false;
+            if( eventSyncType == EventSyncType.JoynSync && isInitialSyncComplete ) sync = false;
+
             isInitialSyncComplete = true;
-            if( sn != null ) sn.OnEventSynced(this);
+            if( sync && sn != null ) { sn.OnEventSynced(this); }
+        }
+
+        public override void OnOwnershipTransferred(VRCPlayerApi player)
+        {
+            if( player.isMaster ) return; // Proxy解除時の対策がこれでいいかもっと検討したほうがいい
+            if( eventSyncType == EventSyncType.Proxy ) sn.OnProxyOwnershipTransferred(this);
         }
     }
 }

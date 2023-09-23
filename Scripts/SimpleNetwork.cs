@@ -64,9 +64,9 @@ namespace tutinoco
 
         private object[][] evObjs = new object[0][];
         private SimpleNetworkBehaviour[] behaviours = new SimpleNetworkBehaviour[0];
-        [SerializeField] private SimpleNetworkProxy[] proxys;
+        [SerializeField] private SimpleNetworkEventSync[] proxys;
         [SerializeField] public SimpleNetworkEventSync joinSync;
-        private SimpleNetworkProxy myProxy;
+        private SimpleNetworkEventSync myProxy;
         private int[] refer = new int[0];
 
         public static SimpleNetwork GetInstance()
@@ -198,15 +198,15 @@ namespace tutinoco
             return false;
         }
 
-        private void AttachProxy( VRCPlayerApi player, SimpleNetworkProxy proxy )
+        private void AttachProxy( VRCPlayerApi player, SimpleNetworkEventSync proxy )
         {
             int pid = player.playerId;
             int[] temp = new int[pid];
             refer.CopyTo(temp, 0);
             refer = temp;
-            refer[pid-1] = proxy.GetNum();
+            refer[pid-1] = proxy.gameObject.transform.GetSiblingIndex();
 
-            if( isDebugMode ) Debug.Log("SimpleNetwork Assigned Proxy #"+proxy.GetNum()+" to "+player.displayName+" (playerId: "+player.playerId+")");
+            if( isDebugMode ) Debug.Log("SimpleNetwork Assigned Proxy #"+refer[pid-1]+" to "+player.displayName+" (playerId: "+player.playerId+")");
         }
 
         private void DetachProxy( VRCPlayerApi player )
@@ -368,7 +368,7 @@ namespace tutinoco
             return false;
         }
 
-        public void OnProxyOwnershipTransferred( SimpleNetworkProxy proxy )
+        public void OnProxyOwnershipTransferred( SimpleNetworkEventSync proxy )
         {
             VRCPlayerApi player = Networking.GetOwner(proxy.gameObject);
             AttachProxy(player, proxy);
@@ -391,7 +391,7 @@ namespace tutinoco
             if( !Networking.IsMaster ) return;
 
             for(var i=0; i<proxys.Length; i++) {
-                SimpleNetworkProxy proxy = proxys[i];
+                SimpleNetworkEventSync proxy = proxys[i];
                 if( IsProxyUsed(i) ) continue;
                 if( Networking.IsOwner(player, proxy.gameObject) ) OnProxyOwnershipTransferred(proxy);
                 else Networking.SetOwner(player, proxy.gameObject);
