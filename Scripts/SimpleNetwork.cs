@@ -2,6 +2,8 @@ using UdonSharp;
 using UnityEngine;
 using VRC.SDKBase;
 using VRC.Udon;
+using System;
+using System.Text.RegularExpressions;
 
 namespace tutinoco
 {
@@ -63,11 +65,13 @@ namespace tutinoco
         private bool isDebugMode;
 
         private object[][] evObjs = new object[0][];
+        [SerializeField] private SimpleNetworkConsole console;
         private SimpleNetworkBehaviour[] behaviours = new SimpleNetworkBehaviour[0];
         [SerializeField] private SimpleNetworkEventSync[] proxys;
         [SerializeField] public SimpleNetworkEventSync joinSync;
         private SimpleNetworkEventSync myProxy;
         private int[] refer = new int[0];
+        
 
         public static SimpleNetwork GetInstance()
         {
@@ -80,6 +84,31 @@ namespace tutinoco
         {
             var sn = GetInstance();
             sn.isDebugMode = flg;
+        }
+
+        public static object[] StringToValues(string strvalue)
+        {
+            if( strvalue == "" ) return null;
+            
+            string[] values = strvalue.Split(',');
+            object[] objs = new object[values.Length];
+
+            for(int i = 0; i < values.Length; i++) {
+                string value = values[i];
+
+                float _f;
+                long _l;
+                double _d;
+                int _i;
+
+                if( value[value.Length-1]=='f' && float.TryParse(value.Substring(0,value.Length-1), out _f) ) objs[i]=_f;
+                else if( value[value.Length-1]=='l' && long.TryParse(value, out _l) ) objs[i]=_l;
+                else if( value.IndexOf('.')!=-1 && double.TryParse(value, out _d) ) objs[i]=_d;
+                else if( int.TryParse(value, out _i) ) objs[i]=_i;
+                else objs[i]=value;
+            }
+
+            return objs;
         }
 
         void Update()
@@ -102,7 +131,7 @@ namespace tutinoco
                 double delay = (double)evObj[(int)EvObj.Delay];
                 int counter = (int)((delay-(int)delay) * 1000000);
                 if( (int)delay == counter ){
-                    if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(object[])){foreach(var w in(object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("SimpleNetwork SendEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],((string)evObj[(int)EvObj.Target]=="")?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
+                    if(isDebugMode) DebugEventLog(evObj);
                     RemoveEvent(evObj);
                     if( (int)evObj[(int)EvObj.SendTo]==(int)SendTo.Self ||
                         (int)evObj[(int)EvObj.SendTo]==Networking.LocalPlayer.playerId+(int)SendTo.Length ) ReceiveEvent(evObj, (string)evObj[(int)EvObj.Target]);
@@ -111,6 +140,27 @@ namespace tutinoco
             }
 
             myProxy.SyncEvents();
+        }
+
+        public void DebugEventLog( object[] evObj ) {
+            var v=evObj[(int)EvObj.Value];
+            string s="";
+            if( v != null ) {
+                if(v.GetType()==typeof(object[])) {
+                    foreach(var w in(object[])v) s+=","+w.ToString();
+                    s=s.Substring(1);
+                } else {
+                    s = (string)v;
+                }
+            } else {
+                s = "null";
+            }
+
+            string t = string.Format("SendEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],((string)evObj[(int)EvObj.Target]=="")?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s);
+            Debug.Log("SimpleNetwork "+t);
+
+            DateTime dt = DateTime.Now;            
+            console.AddLog("["+dt.ToString("HH:mm:ss")+"] "+t);
         }
 
         public bool IsReady() { return myProxy != null; }
@@ -306,12 +356,12 @@ namespace tutinoco
 
             else if( name == "CLEAR_JOINEVENT" ) {
                 Debug.Log("CLEAR_JOINEVENT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-/*                object[] val = (object[])evObj[(int)EvObj.Value];
+                object[] val = (object[])evObj[(int)EvObj.Value];
                 string target = (string)val[1];
                 if( target != "" ) joinSync.RemoveEvents((string)val[0], target);
                 else joinSync.RemoveEvents((string)val[0], (SimpleNetworkBehaviour)evObj[(int)EvObj.Source]);
                 joinSync.SyncEvents();
-*/            }
+            }
 
             else {
                 evObj = (object[])evObj.Clone();
@@ -377,10 +427,34 @@ namespace tutinoco
             myProxy = proxy;
 
             if( isDebugMode ) Debug.Log("SimpleNetwork BehavioursList ================================");
-            for(int i=0; i<behaviours.Length; i++) { behaviours[i].OnSimpleNetworkReady(); if( isDebugMode ) Debug.Log(i+": "+ behaviours[i]._group); }
+            for(int i=0; i<behaviours.Length; i++) { 
+                behaviours[i].OnSimpleNetworkReady();
+                if( isDebugMode ) Debug.Log(i+": "+ behaviours[i]._group);
+                string name = behaviours[i].gameObject.name;
+                string group = behaviours[i]._group;
+                if( group != null && group != "" ) name += " ("+group+")";
+                console.AddBehaviour(i, name);
+            }
             if( isDebugMode ) Debug.Log("========================================== BehavioursList End");
         }
 
+/*
+        // イベントを送る方法メモ
+        public void AddConsoleEvent( string name, string text )
+        {
+            object[] evObj = new object[(int)EvObj.Length];
+            evObj[(int)EvObj.Source] = this;
+            evObj[(int)EvObj.RequestTo] = RequestTo.None;
+            evObj[(int)EvObj.SendTo] = SendTo.All;
+            evObj[(int)EvObj.Name] = name;
+            evObj[(int)EvObj.Value] = text;
+            evObj[(int)EvObj.Target] = "Console";
+            evObj[(int)EvObj.Delay] = 0;
+            evObj[(int)EvObj.JoinSync] = JoinSync.None;
+            evObj[(int)EvObj.Sender] = Networking.LocalPlayer.playerId;
+            AddEvent(evObj);
+        }
+*/
         public void Test()
         {
             HandleAllEvents(joinSync);

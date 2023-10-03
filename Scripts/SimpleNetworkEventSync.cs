@@ -74,6 +74,7 @@ namespace tutinoco
         
         public virtual void Start()
         {
+            if( eventSyncType == EventSyncType.JoynSync ) isWaiting = true;
             if( !Networking.IsMaster ) return;
             count++;
             isInitialSyncComplete = true;
