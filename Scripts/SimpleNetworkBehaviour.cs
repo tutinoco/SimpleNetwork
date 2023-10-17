@@ -10,20 +10,18 @@ namespace tutinoco
     {
         [System.NonSerialized] public int _id;
         [System.NonSerialized] public SimpleNetwork _sn;
-        [System.NonSerialized] public string _group;
-        [System.NonSerialized] public int _groupIndex;
+        [System.NonSerialized] public int _findIndex;
         private object[] obj;
         private string err = "SimpleNetworkError: Could not find {0} in received value.";
         public object[] none { get; } = (object[])null;
         protected VRCPlayerApi me { get { return Networking.LocalPlayer; } }
 
-        public void SimpleNetworkInit( string group="" )
+        public void SimpleNetworkInit()
         {
             if( _sn == null ) {
                 _sn = SimpleNetwork.GetInstance();
                 _sn.SetBehaviour(this);
             }
-            if( group != "" ) SetGroupName(group);
         }
 
         public object[] Pack(params object[] args) { return (object[])args.Clone(); }
@@ -33,20 +31,12 @@ namespace tutinoco
         public bool IsMe( VRCPlayerApi p ) { return Networking.LocalPlayer == p; }
 
         public SimpleNetworkBehaviour[] GetBehaviours() { return _sn.GetBehaviours(); }
-        public SimpleNetworkBehaviour[] GetBehaviours( string group ) { return _sn.GetBehaviours(group); }
+        public SimpleNetworkBehaviour[] GetBehaviours( string find ) { return _sn.GetBehaviours(find); }
 
         public void Duplicate( SimpleNetworkBehaviour behaviour, Vector3 position ) { Duplicate(behaviour, position, Quaternion.identity); }
         public void Duplicate( SimpleNetworkBehaviour behaviour, Vector3 position, Quaternion rotation )
         {
             RequestEvent(RequestTo.Server, "DUPLICATE", Pack(behaviour, position, (Quaternion)rotation));
-        }
-
-        public string GetGroupName() { return _group; }
-        public void SetGroupName( string group )
-        {
-            string charsToRemove = "?*|&";
-            foreach (char c in charsToRemove) group = group.Replace(c.ToString(), "");
-            _group = group;
         }
 
         private object[] E(params object[] args)
@@ -82,7 +72,6 @@ namespace tutinoco
         }
 
         public virtual void OnSimpleNetworkReady() { }
-        public virtual void OnChangeGroupName( bool global ) { }
         public virtual void OnDuplicateComplete( SimpleNetworkBehaviour behaviour ) { }
 
         public void ReceivesEvent(object[] evObj) {
@@ -94,7 +83,7 @@ namespace tutinoco
             if( value == null ) return;
 
             Type t = value.GetType();
-            if( t == typeof(bool) ) ReceiveEvent(name, (bool)value);
+            if( t == typeof(bool) ) ReceiveEvent(name, (bool)value); // Switch文のほうがよくない？
             else if( t == typeof(char) ) ReceiveEvent(name, (char)value);
             else if( t == typeof(byte) ) ReceiveEvent(name, (byte)value);
             else if( t == typeof(sbyte) ) ReceiveEvent(name, (sbyte)value);
@@ -144,7 +133,7 @@ namespace tutinoco
         {
             string name = (string)evObj[(int)EvObj.Name];
             string target = (string)evObj[(int)EvObj.Target];
-            ClearJoinEvent(name, target);
+            RemoveJoinEvent(name, target);
 
             evObj = (object[])evObj.Clone();
             evObj[(int)EvObj.RequestTo] = RequestTo.Server;
@@ -158,15 +147,15 @@ namespace tutinoco
             RequestEvent(evObj);
         }
 
-        public void ClearJoinEvent( string name="", string target="" )
+        public void RemoveJoinEvent( string name="", string target="" )
         {
-            RequestEvent(RequestTo.Server, "CLEAR_JOINEVENT", Pack(name, target));
+            RequestEvent(RequestTo.Server, "REMOVE_JOINEVENT", Pack(name, target));
         }
 
         // Meta
         public int GetDelay() { return (int)obj[(int)EvObj.Delay]; }
         public SimpleNetworkBehaviour GetSource() { return (SimpleNetworkBehaviour)obj[(int)EvObj.Source]; }
-        public int GetIndex() { return _groupIndex; }
+        public int GetIteration() { return _findIndex; }
         public int GetSender() { return (int)obj[(int)EvObj.Sender]; }
         public string GetTarget() { return (string)obj[(int)EvObj.Target]; }
         public int[] GetRecipients()

@@ -18,7 +18,7 @@ namespace tutinoco
         [SerializeField] protected SimpleNetwork sn;
         [SerializeField] protected EventSyncType eventSyncType;
         protected bool isWaiting;
-        protected bool isInitialSyncComplete;
+        protected bool firstSyncDone;
 
         [UdonSynced(UdonSyncMode.None)] protected int count;
         [UdonSynced(UdonSyncMode.None)] protected string[] names = new string[0];
@@ -63,22 +63,28 @@ namespace tutinoco
             return idx;
         }
 
-        public static void RemoveElement<T>(ref T[] array, int index)
+        public static void RemoveElement<T>(ref T[] array, int index, int length=1)
         {
-            if (index < 0 || index >= array.Length) return;
-            T[] tmp = new T[array.Length-1];
+            if (index < 0 || index >= array.Length || length <= 0 || index + length > array.Length) return;
+
+            T[] tmp = new T[array.Length - length];
             Array.Copy(array, 0, tmp, 0, index);
-            Array.Copy(array, index + 1, tmp, index, array.Length - index - 1);
+            Array.Copy(array, index + length, tmp, index, array.Length - index - length);
             array = tmp;
         }
-        
+
         public virtual void Start()
         {
             if( eventSyncType == EventSyncType.JoynSync ) isWaiting = true;
             if( !Networking.IsMaster ) return;
             count++;
-            isInitialSyncComplete = true;
+            firstSyncDone = true;
             RequestSerialization();
+        }
+
+        public bool isFirstSyncDone()
+        {
+            return firstSyncDone;
         }
 
         public int EventLength()
@@ -98,12 +104,9 @@ namespace tutinoco
             evObj[(int)EvObj.JoinSync] = joinsyncs[idx];
             evObj[(int)EvObj.Sender] = Networking.GetOwner(gameObject).playerId;
 
-            int index = 0;
-            int length = lengths[idx];
-            for(int i=0; i<idx; i++) index += lengths[i];
-
-            if( length == 1 ) evObj[(int)EvObj.Value] = GetValues(index, length)[0];
-            else if( length > 1 ) evObj[(int)EvObj.Value] = GetValues(index, length);
+            var val = GetValues(idx);
+            int len = lengths[idx];
+            evObj[(int)EvObj.Value] = len > 1 ? val : val[0];
 
             return evObj;
         }
@@ -116,7 +119,11 @@ namespace tutinoco
             var value = evObj[(int)EvObj.Value];
             if( value!=null && value.GetType()==typeof(object[]) ) length = SetValues((object[])value);
             else length = SetValues(new object[] {value});
-
+/*
+            if( eventSyncType == EventSyncType.JoynSync ) {
+                Debug.Log("\tSetEvent: "+(string)evObj[(int)EvObj.Target]+"-"+(string)evObj[(int)EvObj.Name]);
+            }
+*/
             AddElement(ref names, (string)evObj[(int)EvObj.Name]);
             AddElement(ref lengths, length);
             AddElement(ref sources, ((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id);
@@ -126,6 +133,13 @@ namespace tutinoco
             AddElement(ref delays, (int)evObj[(int)EvObj.Delay]);
             AddElement(ref joinsyncs, (int)evObj[(int)EvObj.JoinSync]);
             count++;
+/*
+            if( eventSyncType == EventSyncType.JoynSync ) {
+                string vs = "";
+                for(int x=0; x<values.Length; x++){ int v=values[x]; vs+=(x%2==0?"[":",")+v.ToString()+(x%2==1?"]":""); }
+                Debug.Log("\t\tValues: "+vs);
+            }
+*/
         }
 
         public void SyncEvents()
@@ -137,25 +151,20 @@ namespace tutinoco
 #endif
         }
 
-        public void RemoveEvents( string name, string target ) { RemoveEvents(name, sn.GetBehaviours(target)); }
-        public void RemoveEvents( string name, SimpleNetworkBehaviour behaviour ) { RemoveEvents(name, new SimpleNetworkBehaviour[]{behaviour}); }
-        public void RemoveEvents( string name, SimpleNetworkBehaviour[] behaviours )
+        public void RemoveEvents( string name, string target )
         {
-            foreach(var behaviour in behaviours) {
-                int id = behaviour._id;
-                for(var i=0; i<sources.Length; i++) {
-                    if( name!=null && name!="" && names[i] != name ) continue;
-                    if( id == sources[i] ) {
-                        RemoveValues(values[i*2], values[i*2+1]);
-                        RemoveElement(ref names, i);
-                        RemoveElement(ref lengths, i);
-                        RemoveElement(ref sources, i);
-                        RemoveElement(ref requests, i);
-                        RemoveElement(ref sendtos, i);
-                        RemoveElement(ref targets, i);
-                        RemoveElement(ref delays, i);
-                        RemoveElement(ref joinsyncs, i);
-                    }
+            for(int i=0; i<EventLength(); i++) {
+                if( names[i] == name && targets[i] == target ) {
+                    RemoveValues(i);
+                    RemoveElement(ref names, i);
+                    RemoveElement(ref lengths, i);
+                    RemoveElement(ref sources, i);
+                    RemoveElement(ref requests, i);
+                    RemoveElement(ref sendtos, i);
+                    RemoveElement(ref targets, i);
+                    RemoveElement(ref delays, i);
+                    RemoveElement(ref joinsyncs, i);                    
+                    i--;
                 }
             }
         }
@@ -237,13 +246,17 @@ namespace tutinoco
             return length;
         }
 
-        private object[] GetValues( int index, int length )
+        private object[] GetValues( int index )
         {
-            object[] obj = new object[length][];
+            int pos = 0;
+            int len = lengths[index];
+            for(int i=0; i<index; i++) pos += lengths[i];
 
-            for(int i=0; i<length; i++) {
-                int t = values[(index+i)*2];
-                int j = values[(index+i)*2+1];
+            object[] obj = new object[len][];
+
+            for(int i=0; i<len; i++) {
+                int t = values[(pos+i)*2];
+                int j = values[(pos+i)*2+1];
 
                 if ( t == -1 ) obj[i] = null;
                 else if( t == 0 ) obj[i] = bools[j];
@@ -272,11 +285,15 @@ namespace tutinoco
             return obj;
         }
 
-        private void RemoveValues( int index, int length )
+        private void RemoveValues( int index )
         {
-            for(int i=0; i<length; i++) {
-                int t = values[(index+i)*2];
-                int j = values[(index+i)*2+1];
+            int pos = 0;
+            int len = lengths[index];
+            for(int i=0; i<index; i++) pos += lengths[i];
+
+            for(int i=0; i<len; i++) {
+                int t = values[(pos+i)*2];
+                int j = values[(pos+i)*2+1];
 
                 if( t == 0 ) RemoveElement(ref bools, j);
                 else if( t == 1 ) RemoveElement(ref chars, j);
@@ -299,24 +316,24 @@ namespace tutinoco
                 else if( t == 18 ) RemoveElement(ref Colors, j);
                 else if( t == 19 ) RemoveElement(ref Color32s, j);
                 else if( t == 20 ) RemoveElement(ref Behaviors, j);
+
+                // 値を削除することでインデックスがズレるのを修正
+                for(int k=pos*2; k<values.Length; k+=2) if( t == values[k] ) values[k+1]--;
             }
+
+            RemoveElement(ref values, pos*2, len*2);
         }
 
         public override void OnPreSerialization()
         {
-            if( eventSyncType != EventSyncType.Proxy ) return;
-            isWaiting = false;
             sn.OnEventSynced(this);
+            if( eventSyncType == EventSyncType.Proxy ) isWaiting = false;
         }
 
         public override void OnDeserialization()
         {
-            bool sync = true;
-            if( eventSyncType == EventSyncType.Proxy && !isInitialSyncComplete ) sync = false;
-            if( eventSyncType == EventSyncType.JoynSync && isInitialSyncComplete ) sync = false;
-
-            isInitialSyncComplete = true;
-            if( sync && sn != null ) { sn.OnEventSynced(this); }
+            sn.OnEventSynced(this);
+            firstSyncDone = true;
         }
 
         public override void OnOwnershipTransferred(VRCPlayerApi player)

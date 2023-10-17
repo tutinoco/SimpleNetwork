@@ -18,4 +18,9 @@ public class BehaviourListTemplate : UdonSharpBehaviour
     {
         console.JumpToBehaviour(index);
     }
+
+    public void OnClickSend()
+    {
+        console.ChangeSendEvent(index.ToString());
+    }
 }

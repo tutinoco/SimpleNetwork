@@ -71,8 +71,10 @@ namespace tutinoco
         [SerializeField] public SimpleNetworkEventSync joinSync;
         private SimpleNetworkEventSync myProxy;
         private int[] refer = new int[0];
-        
 
+        [Header("コンソールにアクセスできる人を登録（空なら誰でも操作できます）")]
+        [SerializeField] public string[] administrators;
+        
         public static SimpleNetwork GetInstance()
         {
             GameObject g = GameObject.Find("SimpleNetwork");
@@ -89,7 +91,7 @@ namespace tutinoco
         public static object[] StringToValues(string strvalue)
         {
             if( strvalue == "" ) return null;
-            
+
             string[] values = strvalue.Split(',');
             object[] objs = new object[values.Length];
 
@@ -109,6 +111,15 @@ namespace tutinoco
             }
 
             return objs;
+        }
+
+        void Start()
+        {
+            if( administrators.Length > 0 ) {
+                console.gameObject.SetActive(false);
+                string name = Networking.LocalPlayer.displayName;
+                foreach (var m in administrators) if(m == name) { console.gameObject.SetActive(true); break; }
+            }
         }
 
         void Update()
@@ -131,7 +142,7 @@ namespace tutinoco
                 double delay = (double)evObj[(int)EvObj.Delay];
                 int counter = (int)((delay-(int)delay) * 1000000);
                 if( (int)delay == counter ){
-                    if(isDebugMode) DebugEventLog(evObj);
+                    if(isDebugMode) DebugEventLog("<color=\"#ff6188\">SendEvent:</color>", evObj);
                     RemoveEvent(evObj);
                     if( (int)evObj[(int)EvObj.SendTo]==(int)SendTo.Self ||
                         (int)evObj[(int)EvObj.SendTo]==Networking.LocalPlayer.playerId+(int)SendTo.Length ) ReceiveEvent(evObj, (string)evObj[(int)EvObj.Target]);
@@ -142,36 +153,40 @@ namespace tutinoco
             myProxy.SyncEvents();
         }
 
-        public void DebugEventLog( object[] evObj ) {
-            var v=evObj[(int)EvObj.Value];
+        public static string ValuesToString(object v)
+        {
             string s="";
             if( v != null ) {
                 if(v.GetType()==typeof(object[])) {
-                    foreach(var w in(object[])v) s+=","+w.ToString();
+                    foreach(var w in(object[])v) s+=", "+w.ToString();
                     s=s.Substring(1);
                 } else {
-                    s = (string)v;
+                    s = v.ToString();
                 }
             } else {
                 s = "null";
             }
 
-            string t = string.Format("SendEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],((string)evObj[(int)EvObj.Target]=="")?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s);
-            Debug.Log("SimpleNetwork "+t);
+            return s;
+        }
+
+        public void DebugEventLog( string label, object[] evObj ) {
+            string s = ValuesToString(evObj[(int)EvObj.Value]);
+            string t = string.Format("source={0} sendto={1} target={2} delay={3} name={4} value={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],((string)evObj[(int)EvObj.Target]=="")?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s);
 
             DateTime dt = DateTime.Now;            
-            console.AddLog("["+dt.ToString("HH:mm:ss")+"] "+t);
+            console.AddLog(label+" <color=grey>["+dt.ToString("HH:mm:ss")+"] </color>"+t);
         }
 
         public bool IsReady() { return myProxy != null; }
 
         public SimpleNetworkBehaviour[] GetBehaviours() { return behaviours; }
-        public SimpleNetworkBehaviour[] GetBehaviours( string group )
+        public SimpleNetworkBehaviour[] GetBehaviours( string find )
         {
             SimpleNetworkBehaviour[] list = new SimpleNetworkBehaviour[0];
 
             foreach( var behaviour in behaviours ) {
-                if( !IsMatch(behaviour._group, group) ) continue;
+                if( !IsMatch(behaviour.gameObject.name, find) ) continue;
                 SimpleNetworkBehaviour[] tmp = new SimpleNetworkBehaviour[list.Length+1];
                 list.CopyTo(tmp, 0);
                 tmp[tmp.Length-1] = behaviour;
@@ -185,7 +200,7 @@ namespace tutinoco
         {
             if( id >= behaviours.Length ) Debug.Log("SimpleNetwork Error: Attempted to get SimpleNetworkBehaviour number "+id+" that is not unmanaged.");
             return behaviours[id];
-        }           
+        }
 
         public int SetBehaviour(SimpleNetworkBehaviour behaviour)
         {
@@ -299,7 +314,11 @@ namespace tutinoco
 
         public void OnEventSynced( SimpleNetworkEventSync eventSync )
         {
-            Debug.Log("OnEventSynced EventLength: "+eventSync.EventLength());
+            if( joinSync == eventSync ) console.OnJoinEventSynced();
+
+            if( joinSync == eventSync && eventSync.isFirstSyncDone() ) return;
+            if( joinSync != eventSync && !eventSync.isFirstSyncDone() ) return;
+
             HandleAllEvents(eventSync);
         }
 
@@ -354,12 +373,12 @@ namespace tutinoco
                 source.OnDuplicateComplete(b);
             }
 
-            else if( name == "CLEAR_JOINEVENT" ) {
-                Debug.Log("CLEAR_JOINEVENT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            else if( name == "REMOVE_JOINEVENT" ) {
                 object[] val = (object[])evObj[(int)EvObj.Value];
-                string target = (string)val[1];
-                if( target != "" ) joinSync.RemoveEvents((string)val[0], target);
-                else joinSync.RemoveEvents((string)val[0], (SimpleNetworkBehaviour)evObj[(int)EvObj.Source]);
+                string n = (string)val[0];
+                string t = (string)val[1];
+                if( t != "" ) joinSync.RemoveEvents(n, t);
+//                else joinSync.RemoveEvents(name, (SimpleNetworkBehaviour)evObj[(int)EvObj.Source]);
                 joinSync.SyncEvents();
             }
 
@@ -368,22 +387,27 @@ namespace tutinoco
                 evObj[(int)EvObj.RequestTo] = RequestTo.None;
                 evObj[(int)EvObj.SendTo] = SendTo.All;
                 joinSync.SetEvent(evObj);
-                Debug.Log("SET JOIN EVENT!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! "+joinSync.EventLength());
                 joinSync.SyncEvents();
             }
         }
 
         public void ReceiveEvent( object[] evObj, string target )
         {
-            if(isDebugMode){var v=evObj[(int)EvObj.Value];string s="";if(v!=null){if(v.GetType()==typeof(object[])){foreach(var w in(object[])v){s+=","+w.ToString();}s=s.Substring(1);}else{s=(string)v;}}else{s="null";}Debug.Log(string.Format("SimpleNetwork ReceiveEvent: source={0} sendto={1} target={2} delay={3} name={4} v={5}",((SimpleNetworkBehaviour)evObj[(int)EvObj.Source])._id,evObj[(int)EvObj.SendTo],evObj[(int)EvObj.Target]==""?"[source]":evObj[(int)EvObj.Target],evObj[(int)EvObj.Delay],evObj[(int)EvObj.Name],s));}
-            if( target == "" ) {
+            if(isDebugMode) DebugEventLog("<color=#3bbfbf>ReceiveEvent:</color>", evObj);
+            
+            int index = 0;
+            if( int.TryParse(target, out index) ) {
+                var b = behaviours[index];
+                b._findIndex = 0;
+                b.ReceivesEvent(evObj);
+            } else if( target == "" ) {
                 var b = (SimpleNetworkBehaviour)evObj[(int)EvObj.Source];
-                b._groupIndex = 0;
+                b._findIndex = 0;
                 b.ReceivesEvent(evObj);
             } else {
                 var matchs = GetBehaviours(target);
                 for(int i=0; i<matchs.Length; i++) {
-                    matchs[i]._groupIndex = i;
+                    matchs[i]._findIndex = i;
                     matchs[i].ReceivesEvent(evObj);
                 }
             }
@@ -429,11 +453,8 @@ namespace tutinoco
             if( isDebugMode ) Debug.Log("SimpleNetwork BehavioursList ================================");
             for(int i=0; i<behaviours.Length; i++) { 
                 behaviours[i].OnSimpleNetworkReady();
-                if( isDebugMode ) Debug.Log(i+": "+ behaviours[i]._group);
-                string name = behaviours[i].gameObject.name;
-                string group = behaviours[i]._group;
-                if( group != null && group != "" ) name += " ("+group+")";
-                console.AddBehaviour(i, name);
+                if( isDebugMode ) Debug.Log(i+": "+ behaviours[i].gameObject.name);
+                console.AddBehaviour(i, behaviours[i].gameObject.name);
             }
             if( isDebugMode ) Debug.Log("========================================== BehavioursList End");
         }
